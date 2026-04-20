@@ -1,24 +1,68 @@
 .billing-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
-  margin-bottom: 24px;
 }
 
-.summary-item {
-  padding: 20px;
+.billing-summary-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.billing-summary-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.billing-summary-icon.blue { background: var(--primary-light); color: var(--primary); }
+.billing-summary-icon.green { background: var(--success-light); color: var(--success); }
+.billing-summary-icon.red { background: var(--danger-light); color: var(--danger); }
+
+.billing-summary-info {}
+
+.summary-item {}
+
+.summary-item .summary-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.summary-item .summary-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .summary-label {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
 }
 
 .summary-value {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
-  color: var(--primary);
+  color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+  .billing-summary { grid-template-columns: 1fr; }
 }

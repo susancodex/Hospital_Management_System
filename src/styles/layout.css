@@ -2,10 +2,11 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: var(--bg-secondary);
+  background-color: var(--bg-app);
+  overflow: hidden;
 }
 
-.layout-container {
+.layout-body {
   display: flex;
   flex: 1;
   overflow: hidden;
@@ -14,11 +15,14 @@
 .main-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
-  background-color: var(--bg-secondary);
+  padding: 28px 32px;
+  background-color: var(--bg-app);
+  min-width: 0;
 }
 
-.main-content > * {
-  max-width: 1400px;
-  margin: 0 auto;
+@media (max-width: 1024px) {
+  .main-content { padding: 20px; }
+}
+@media (max-width: 768px) {
+  .main-content { padding: 16px; }
 }

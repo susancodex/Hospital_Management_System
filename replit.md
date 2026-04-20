@@ -42,6 +42,17 @@ A full-stack Hospital Management System built with React (frontend) and Django (
 - JWT tokens stored in localStorage (`access_token`, `refresh_token`)
 - CORS enabled for all origins (development)
 
+## UI Design System
+
+The UI was redesigned to match an enterprise healthcare SaaS platform:
+- **Color palette**: Primary blue (#2563EB), Success green (#22C55E), Background light gray (#F8FAFC)
+- **Sidebar**: Dark navy (`#0f172a`) sidebar with Lucide icons, collapsible, active-state highlight
+- **Navbar**: Search bar, notification bell, user dropdown with role-based greeting
+- **Dashboard**: KPI cards, recharts area/bar/pie charts, today's appointments panel
+- **Login**: Two-panel layout with branded hero section on the left
+- **Components**: Redesigned buttons, modals, badges, tables, form inputs
+- **Icons**: Lucide React throughout (Activity, Users, CalendarDays, CreditCard, etc.)
+
 ## Setup Notes
 
 - Django `ALLOWED_HOSTS = ['*']` for Replit proxy compatibility

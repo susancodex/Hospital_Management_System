@@ -1,4 +1,5 @@
 import React from 'react';
+import { Loader2, CheckCircle2, XCircle, AlertCircle, Info } from 'lucide-react';
 import '../styles/components.css';
 
 export const Button = ({ children, variant = 'primary', size = 'md', disabled = false, ...props }) => (
@@ -13,6 +14,12 @@ export const Card = ({ children, className = '' }) => (
 
 export const Modal = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
+
+  React.useEffect(() => {
+    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -29,13 +36,21 @@ export const Modal = ({ isOpen, onClose, title, children }) => {
 
 export const Toast = ({ message, type = 'info', onClose }) => {
   React.useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
+    const timer = setTimeout(onClose, 4000);
     return () => clearTimeout(timer);
   }, [onClose]);
 
+  const icons = {
+    success: <CheckCircle2 size={16} />,
+    danger: <XCircle size={16} />,
+    warning: <AlertCircle size={16} />,
+    info: <Info size={16} />,
+  };
+
   return (
     <div className={`toast toast-${type}`}>
-      {message}
+      {icons[type]}
+      <span>{message}</span>
     </div>
   );
 };
@@ -45,6 +60,7 @@ export const StatusBadge = ({ status }) => {
     active: { label: 'Active', color: 'success' },
     inactive: { label: 'Inactive', color: 'danger' },
     pending: { label: 'Pending', color: 'warning' },
+    scheduled: { label: 'Scheduled', color: 'info' },
     completed: { label: 'Completed', color: 'success' },
     cancelled: { label: 'Cancelled', color: 'danger' },
     paid: { label: 'Paid', color: 'success' },
@@ -52,18 +68,29 @@ export const StatusBadge = ({ status }) => {
     partial: { label: 'Partial', color: 'warning' },
   };
 
-  const config = statusConfig[status] || { label: status, color: 'info' };
-
+  const config = statusConfig[status?.toLowerCase()] || { label: status, color: 'info' };
   return <span className={`badge badge-${config.color}`}>{config.label}</span>;
 };
 
 export const DataTable = ({ columns, data, actions, loading = false }) => {
   if (loading) {
-    return <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading...</div>;
+    return (
+      <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <Loader2 size={28} className="spin" style={{ animation: 'spin 1s linear infinite', color: 'var(--primary)' }} />
+        <span style={{ fontSize: 14 }}>Loading data...</span>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
   }
 
-  if (data.length === 0) {
-    return <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>No data available</div>;
+  if (!data || data.length === 0) {
+    return (
+      <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.4 }}>📋</div>
+        <div style={{ fontSize: 14, fontWeight: 500 }}>No records found</div>
+        <div style={{ fontSize: 13, marginTop: 4 }}>Start by adding a new record</div>
+      </div>
+    );
   }
 
   return (
@@ -74,7 +101,7 @@ export const DataTable = ({ columns, data, actions, loading = false }) => {
             {columns.map((col) => (
               <th key={col.key}>{col.label}</th>
             ))}
-            {actions && <th>Actions</th>}
+            {actions && <th style={{ textAlign: 'right' }}>Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -84,10 +111,14 @@ export const DataTable = ({ columns, data, actions, loading = false }) => {
                 <td key={col.key}>{col.render ? col.render(row[col.key], row) : row[col.key]}</td>
               ))}
               {actions && (
-                <td>
-                  <div className="action-buttons">
+                <td style={{ textAlign: 'right' }}>
+                  <div className="action-buttons" style={{ justifyContent: 'flex-end' }}>
                     {actions(row).map((action, i) => (
-                      <button key={i} className={`action-btn action-btn-${action.variant || 'primary'}`} onClick={action.onClick}>
+                      <button
+                        key={i}
+                        className={`action-btn action-btn-${action.variant || 'primary'}`}
+                        onClick={action.onClick}
+                      >
                         {action.label}
                       </button>
                     ))}
@@ -126,9 +157,7 @@ export const Select = React.forwardRef(({ label, error, options, ...props }, ref
   <FormGroup label={label} error={error}>
     <select ref={ref} className={`form-input ${error ? 'error' : ''}`} {...props}>
       {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
       ))}
     </select>
   </FormGroup>
