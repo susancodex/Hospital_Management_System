@@ -343,3 +343,16 @@ select.form-input {
   background-position: right 12px center;
   padding-right: 36px;
 }
+
+.error-text {
+  font-size: 12px;
+  color: var(--danger);
+  font-weight: 500;
+  margin-top: 4px;
+  display: block;
+}
+
+.form-input.input-error {
+  border-color: var(--danger);
+  background: var(--danger-light);
+}

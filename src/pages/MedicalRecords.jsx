@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { medicalRecordsAPI } from '../api/services.js';
+import { medicalRecordsAPI, patientsAPI, doctorsAPI } from '../api/services.js';
 import { Card, Button, DataTable, Modal, Input, Form, Textarea, Toast } from '../components/UIComponents.jsx';
 import '../styles/crud.css';
 import '../styles/records.css';
 
 export default function MedicalRecords() {
   const [records, setRecords] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState({ isOpen: false, type: 'add', record: null });
   const [toast, setToast] = useState(null);
   const [formData, setFormData] = useState({
-    patient_id: '',
-    doctor_id: '',
+    patient: '',
+    doctor: '',
     record_date: '',
     diagnosis: '',
     treatment: '',
@@ -20,15 +22,19 @@ export default function MedicalRecords() {
   });
   const [formErrors, setFormErrors] = useState({});
 
-  useEffect(() => {
-    fetchRecords();
-  }, []);
+  useEffect(() => { fetchAll(); }, []);
 
-  const fetchRecords = async () => {
+  const fetchAll = async () => {
     try {
       setLoading(true);
-      const response = await medicalRecordsAPI.list();
-      setRecords(response.data);
+      const [recRes, patientsRes, doctorsRes] = await Promise.all([
+        medicalRecordsAPI.list(),
+        patientsAPI.list(),
+        doctorsAPI.list(),
+      ]);
+      setRecords(recRes.data);
+      setPatients(patientsRes.data);
+      setDoctors(doctorsRes.data);
       setError('');
     } catch (err) {
       setError('Failed to load medical records');
@@ -38,18 +44,24 @@ export default function MedicalRecords() {
     }
   };
 
+  const emptyForm = () => ({
+    patient: '', doctor: '',
+    record_date: new Date().toISOString().split('T')[0],
+    diagnosis: '', treatment: '', notes: '',
+  });
+
   const handleOpenModal = (type, record = null) => {
     if (type === 'add') {
-      setFormData({
-        patient_id: '',
-        doctor_id: '',
-        record_date: new Date().toISOString().split('T')[0],
-        diagnosis: '',
-        treatment: '',
-        notes: '',
-      });
+      setFormData(emptyForm());
     } else {
-      setFormData(record);
+      setFormData({
+        patient: record.patient,
+        doctor: record.doctor || '',
+        record_date: record.record_date,
+        diagnosis: record.diagnosis,
+        treatment: record.treatment || '',
+        notes: record.notes || '',
+      });
     }
     setFormErrors({});
     setModal({ isOpen: true, type, record });
@@ -57,15 +69,15 @@ export default function MedicalRecords() {
 
   const handleCloseModal = () => {
     setModal({ isOpen: false, type: 'add', record: null });
-    setFormData({});
+    setFormData(emptyForm());
     setFormErrors({});
   };
 
   const validateForm = () => {
     const errors = {};
-    if (!formData.patient_id) errors.patient_id = 'Patient is required';
-    if (!formData.doctor_id) errors.doctor_id = 'Doctor is required';
+    if (!formData.patient) errors.patient = 'Patient is required';
     if (!formData.diagnosis) errors.diagnosis = 'Diagnosis is required';
+    if (!formData.record_date) errors.record_date = 'Date is required';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -73,29 +85,29 @@ export default function MedicalRecords() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
-
+    const payload = { ...formData, doctor: formData.doctor || null };
     try {
       if (modal.type === 'add') {
-        await medicalRecordsAPI.create(formData);
+        await medicalRecordsAPI.create(payload);
         setToast({ message: 'Record created successfully!', type: 'success' });
       } else {
-        await medicalRecordsAPI.update(modal.record.id, formData);
+        await medicalRecordsAPI.update(modal.record.id, payload);
         setToast({ message: 'Record updated successfully!', type: 'success' });
       }
       handleCloseModal();
-      fetchRecords();
+      fetchAll();
     } catch (err) {
-      setToast({ message: 'Failed to save record', type: 'danger' });
+      const msg = err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save record';
+      setToast({ message: msg, type: 'danger' });
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this record?')) return;
-
     try {
       await medicalRecordsAPI.delete(id);
-      setToast({ message: 'Record deleted successfully!', type: 'success' });
-      fetchRecords();
+      setToast({ message: 'Record deleted!', type: 'success' });
+      fetchAll();
     } catch (err) {
       setToast({ message: 'Failed to delete record', type: 'danger' });
     }
@@ -103,10 +115,13 @@ export default function MedicalRecords() {
 
   const columns = [
     { key: 'id', label: 'ID' },
-    { key: 'patient_id', label: 'Patient' },
-    { key: 'doctor_id', label: 'Doctor' },
+    { key: 'patient_name', label: 'Patient' },
+    { key: 'doctor_name', label: 'Doctor' },
     { key: 'record_date', label: 'Date' },
-    { key: 'diagnosis', label: 'Diagnosis' },
+    {
+      key: 'diagnosis', label: 'Diagnosis',
+      render: (val) => val.length > 50 ? val.substring(0, 50) + '…' : val,
+    },
   ];
 
   const actions = (row) => [
@@ -136,50 +151,80 @@ export default function MedicalRecords() {
       <Modal
         isOpen={modal.isOpen}
         onClose={handleCloseModal}
-        title={modal.type === 'add' ? 'Create Medical Record' : 'Medical Record Details'}
+        title={
+          modal.type === 'add' ? 'Create Medical Record'
+          : modal.type === 'view' ? 'Medical Record Details'
+          : 'Edit Medical Record'
+        }
       >
         <Form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Patient *</label>
+            <select
+              className={`form-input${formErrors.patient ? ' input-error' : ''}`}
+              value={formData.patient}
+              onChange={(e) => setFormData({ ...formData, patient: e.target.value })}
+              disabled={modal.type === 'view'}
+            >
+              <option value="">Select patient…</option>
+              {patients.map((p) => (
+                <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>
+              ))}
+            </select>
+            {formErrors.patient && <span className="error-text">{formErrors.patient}</span>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Doctor</label>
+            <select
+              className="form-input"
+              value={formData.doctor}
+              onChange={(e) => setFormData({ ...formData, doctor: e.target.value })}
+              disabled={modal.type === 'view'}
+            >
+              <option value="">No specific doctor</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>Dr. {d.first_name} {d.last_name} — {d.specialization}</option>
+              ))}
+            </select>
+          </div>
+
           <Input
-            label="Patient ID"
-            value={formData.patient_id}
-            onChange={(e) => setFormData({ ...formData, patient_id: e.target.value })}
-            error={formErrors.patient_id}
-          />
-          <Input
-            label="Doctor ID"
-            value={formData.doctor_id}
-            onChange={(e) => setFormData({ ...formData, doctor_id: e.target.value })}
-            error={formErrors.doctor_id}
-          />
-          <Input
-            label="Record Date"
+            label="Record Date *"
             type="date"
             value={formData.record_date}
             onChange={(e) => setFormData({ ...formData, record_date: e.target.value })}
+            error={formErrors.record_date}
+            disabled={modal.type === 'view'}
           />
+
           <Textarea
-            label="Diagnosis"
+            label="Diagnosis *"
             value={formData.diagnosis}
             onChange={(e) => setFormData({ ...formData, diagnosis: e.target.value })}
             error={formErrors.diagnosis}
             rows="3"
+            disabled={modal.type === 'view'}
           />
+
           <Textarea
             label="Treatment"
             value={formData.treatment}
             onChange={(e) => setFormData({ ...formData, treatment: e.target.value })}
             rows="3"
+            disabled={modal.type === 'view'}
           />
+
           <Textarea
             label="Notes"
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             rows="3"
+            disabled={modal.type === 'view'}
           />
+
           <div className="modal-actions">
-            <Button variant="secondary" onClick={handleCloseModal}>
-              Close
-            </Button>
+            <Button variant="secondary" type="button" onClick={handleCloseModal}>Close</Button>
             {modal.type !== 'view' && (
               <Button variant="primary" type="submit">
                 {modal.type === 'add' ? 'Create Record' : 'Update Record'}
@@ -189,13 +234,7 @@ export default function MedicalRecords() {
         </Form>
       </Modal>
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

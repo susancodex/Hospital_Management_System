@@ -32,7 +32,7 @@ export default function Login() {
   };
 
   const demoCredentials = [
-    { role: 'Admin', user: 'admin', pass: 'admin' },
+    { role: 'Admin', user: 'admin', pass: 'admin123' },
     { role: 'Doctor', user: 'doctor1', pass: 'doctor123' },
     { role: 'Reception', user: 'reception1', pass: 'reception123' },
   ];

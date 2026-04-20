@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { appointmentsAPI } from '../api/services.js';
-import { Card, Button, DataTable, Modal, Input, Form, Select, Textarea, Toast, StatusBadge } from '../components/UIComponents.jsx';
+import { appointmentsAPI, patientsAPI, doctorsAPI } from '../api/services.js';
+import { Card, Button, DataTable, Modal, Input, Form, Textarea, Toast, StatusBadge } from '../components/UIComponents.jsx';
 import '../styles/crud.css';
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState({ isOpen: false, type: 'add', appointment: null });
   const [toast, setToast] = useState(null);
   const [formData, setFormData] = useState({
-    patient_id: '',
-    doctor_id: '',
+    patient: '',
+    doctor: '',
     appointment_date: '',
     appointment_time: '',
     status: 'scheduled',
@@ -19,36 +21,45 @@ export default function Appointments() {
   });
   const [formErrors, setFormErrors] = useState({});
 
-  useEffect(() => {
-    fetchAppointments();
-  }, []);
+  useEffect(() => { fetchAll(); }, []);
 
-  const fetchAppointments = async () => {
+  const fetchAll = async () => {
     try {
       setLoading(true);
-      const response = await appointmentsAPI.list();
-      setAppointments(response.data);
+      const [apptRes, patientsRes, doctorsRes] = await Promise.all([
+        appointmentsAPI.list(),
+        patientsAPI.list(),
+        doctorsAPI.list(),
+      ]);
+      setAppointments(apptRes.data);
+      setPatients(patientsRes.data);
+      setDoctors(doctorsRes.data);
       setError('');
     } catch (err) {
-      setError('Failed to load appointments');
+      setError('Failed to load data. Please check your connection.');
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
+  const emptyForm = () => ({
+    patient: '', doctor: '', appointment_date: '',
+    appointment_time: '', status: 'scheduled', notes: '',
+  });
+
   const handleOpenModal = (type, appointment = null) => {
     if (type === 'add') {
-      setFormData({
-        patient_id: '',
-        doctor_id: '',
-        appointment_date: '',
-        appointment_time: '',
-        status: 'scheduled',
-        notes: '',
-      });
+      setFormData(emptyForm());
     } else {
-      setFormData(appointment);
+      setFormData({
+        patient: appointment.patient,
+        doctor: appointment.doctor,
+        appointment_date: appointment.appointment_date,
+        appointment_time: appointment.appointment_time || '',
+        status: appointment.status,
+        notes: appointment.notes || '',
+      });
     }
     setFormErrors({});
     setModal({ isOpen: true, type, appointment });
@@ -56,14 +67,14 @@ export default function Appointments() {
 
   const handleCloseModal = () => {
     setModal({ isOpen: false, type: 'add', appointment: null });
-    setFormData({});
+    setFormData(emptyForm());
     setFormErrors({});
   };
 
   const validateForm = () => {
     const errors = {};
-    if (!formData.patient_id) errors.patient_id = 'Patient is required';
-    if (!formData.doctor_id) errors.doctor_id = 'Doctor is required';
+    if (!formData.patient) errors.patient = 'Patient is required';
+    if (!formData.doctor) errors.doctor = 'Doctor is required';
     if (!formData.appointment_date) errors.appointment_date = 'Date is required';
     if (!formData.appointment_time) errors.appointment_time = 'Time is required';
     setFormErrors(errors);
@@ -73,7 +84,6 @@ export default function Appointments() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
-
     try {
       if (modal.type === 'add') {
         await appointmentsAPI.create(formData);
@@ -83,19 +93,19 @@ export default function Appointments() {
         setToast({ message: 'Appointment updated successfully!', type: 'success' });
       }
       handleCloseModal();
-      fetchAppointments();
+      fetchAll();
     } catch (err) {
-      setToast({ message: 'Failed to save appointment', type: 'danger' });
+      const msg = err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save appointment';
+      setToast({ message: msg, type: 'danger' });
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
-
     try {
       await appointmentsAPI.delete(id);
-      setToast({ message: 'Appointment cancelled successfully!', type: 'success' });
-      fetchAppointments();
+      setToast({ message: 'Appointment cancelled!', type: 'success' });
+      fetchAll();
     } catch (err) {
       setToast({ message: 'Failed to cancel appointment', type: 'danger' });
     }
@@ -103,14 +113,14 @@ export default function Appointments() {
 
   const columns = [
     { key: 'id', label: 'ID' },
-    { key: 'patient_id', label: 'Patient' },
-    { key: 'doctor_id', label: 'Doctor' },
+    { key: 'patient_name', label: 'Patient' },
+    { key: 'doctor_name', label: 'Doctor' },
     { key: 'appointment_date', label: 'Date' },
     { key: 'appointment_time', label: 'Time' },
+    { key: 'status', label: 'Status', render: (value) => <StatusBadge status={value} /> },
     {
-      key: 'status',
-      label: 'Status',
-      render: (value) => <StatusBadge status={value} />,
+      key: 'notes', label: 'Notes',
+      render: (val) => val ? (val.length > 40 ? val.substring(0, 40) + '…' : val) : '—',
     },
   ];
 
@@ -124,7 +134,7 @@ export default function Appointments() {
       <div className="crud-header">
         <div>
           <h1>Appointments</h1>
-          <p>Manage appointments</p>
+          <p>Schedule and manage patient appointments</p>
         </div>
         <Button variant="primary" onClick={() => handleOpenModal('add')}>
           + New Appointment
@@ -143,54 +153,76 @@ export default function Appointments() {
         title={modal.type === 'add' ? 'New Appointment' : 'Edit Appointment'}
       >
         <Form onSubmit={handleSubmit}>
-          <Input
-            label="Patient ID"
-            value={formData.patient_id}
-            onChange={(e) => setFormData({ ...formData, patient_id: e.target.value })}
-            error={formErrors.patient_id}
-          />
-          <Input
-            label="Doctor ID"
-            value={formData.doctor_id}
-            onChange={(e) => setFormData({ ...formData, doctor_id: e.target.value })}
-            error={formErrors.doctor_id}
-          />
+          <div className="form-group">
+            <label className="form-label">Patient *</label>
+            <select
+              className={`form-input${formErrors.patient ? ' input-error' : ''}`}
+              value={formData.patient}
+              onChange={(e) => setFormData({ ...formData, patient: e.target.value })}
+            >
+              <option value="">Select patient…</option>
+              {patients.map((p) => (
+                <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>
+              ))}
+            </select>
+            {formErrors.patient && <span className="error-text">{formErrors.patient}</span>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Doctor *</label>
+            <select
+              className={`form-input${formErrors.doctor ? ' input-error' : ''}`}
+              value={formData.doctor}
+              onChange={(e) => setFormData({ ...formData, doctor: e.target.value })}
+            >
+              <option value="">Select doctor…</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>Dr. {d.first_name} {d.last_name} — {d.specialization}</option>
+              ))}
+            </select>
+            {formErrors.doctor && <span className="error-text">{formErrors.doctor}</span>}
+          </div>
+
           <div className="form-grid">
             <Input
-              label="Date"
+              label="Date *"
               type="date"
               value={formData.appointment_date}
               onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
               error={formErrors.appointment_date}
             />
             <Input
-              label="Time"
+              label="Time *"
               type="time"
               value={formData.appointment_time}
               onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
               error={formErrors.appointment_time}
             />
           </div>
-          <select
-            className="form-input"
-            value={formData.status}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-          >
-            <option value="scheduled">Scheduled</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="pending">Pending</option>
-          </select>
+
+          <div className="form-group">
+            <label className="form-label">Status</label>
+            <select
+              className="form-input"
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+            >
+              <option value="scheduled">Scheduled</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="pending">Pending</option>
+            </select>
+          </div>
+
           <Textarea
             label="Notes"
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            rows="4"
+            rows="3"
           />
+
           <div className="modal-actions">
-            <Button variant="secondary" onClick={handleCloseModal}>
-              Cancel
-            </Button>
+            <Button variant="secondary" type="button" onClick={handleCloseModal}>Cancel</Button>
             <Button variant="primary" type="submit">
               {modal.type === 'add' ? 'Schedule Appointment' : 'Update Appointment'}
             </Button>
@@ -198,13 +230,7 @@ export default function Appointments() {
         </Form>
       </Modal>
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
