@@ -4,17 +4,37 @@ export const authAPI = {
   login: (username, password) =>
     apiClient.post('/token/', { username, password }),
 
+  register: (data) => apiClient.post('/register/', data),
+
   refreshToken: (refresh) =>
     apiClient.post('/token/refresh/', { refresh }),
+
+  forgotPassword: (data) => apiClient.post('/forgot-password/', data),
+
+  changePassword: (data) => apiClient.post('/change-password/', data),
+
+  getProfile: () => apiClient.get('/profile/'),
+
+  updateProfile: (formData) =>
+    apiClient.patch('/profile/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 
   logout: () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
   },
 };
 
+const buildListUrl = (base, params) => {
+  if (!params || Object.keys(params).length === 0) return base;
+  const qs = new URLSearchParams(params).toString();
+  return `${base}?${qs}`;
+};
+
 export const doctorsAPI = {
-  list: () => apiClient.get('/doctors/'),
+  list: (params) => apiClient.get(buildListUrl('/doctors/', params)),
   create: (data) => apiClient.post('/doctors/', data),
   retrieve: (id) => apiClient.get(`/doctors/${id}/`),
   update: (id, data) => apiClient.put(`/doctors/${id}/`, data),
@@ -22,7 +42,7 @@ export const doctorsAPI = {
 };
 
 export const patientsAPI = {
-  list: () => apiClient.get('/patients/'),
+  list: (params) => apiClient.get(buildListUrl('/patients/', params)),
   create: (data) => apiClient.post('/patients/', data),
   retrieve: (id) => apiClient.get(`/patients/${id}/`),
   update: (id, data) => apiClient.put(`/patients/${id}/`, data),
@@ -30,7 +50,7 @@ export const patientsAPI = {
 };
 
 export const appointmentsAPI = {
-  list: () => apiClient.get('/appointments/'),
+  list: (params) => apiClient.get(buildListUrl('/appointments/', params)),
   create: (data) => apiClient.post('/appointments/', data),
   retrieve: (id) => apiClient.get(`/appointments/${id}/`),
   update: (id, data) => apiClient.put(`/appointments/${id}/`, data),
@@ -38,7 +58,7 @@ export const appointmentsAPI = {
 };
 
 export const medicalRecordsAPI = {
-  list: () => apiClient.get('/medical-records/'),
+  list: (params) => apiClient.get(buildListUrl('/medical-records/', params)),
   create: (data) => apiClient.post('/medical-records/', data),
   retrieve: (id) => apiClient.get(`/medical-records/${id}/`),
   update: (id, data) => apiClient.put(`/medical-records/${id}/`, data),
@@ -46,7 +66,7 @@ export const medicalRecordsAPI = {
 };
 
 export const billingAPI = {
-  list: () => apiClient.get('/billing/'),
+  list: (params) => apiClient.get(buildListUrl('/billing/', params)),
   create: (data) => apiClient.post('/billing/', data),
   retrieve: (id) => apiClient.get(`/billing/${id}/`),
   update: (id, data) => apiClient.put(`/billing/${id}/`, data),

@@ -51,10 +51,17 @@ export default function Navbar() {
           <span className="navbar-page-title">{pageTitle}</span>
         </div>
 
-        <div className="navbar-search">
+        <form
+          className="navbar-search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const q = new FormData(e.target).get('q');
+            if (q) navigate(`/patients?q=${encodeURIComponent(q)}`);
+          }}
+        >
           <Search size={15} className="navbar-search-icon" />
-          <input placeholder="Search patients, doctors..." />
-        </div>
+          <input name="q" placeholder="Search patients, doctors..." />
+        </form>
 
         <div className="navbar-right">
           <button className="navbar-icon-btn" title="Notifications">
@@ -74,7 +81,11 @@ export default function Navbar() {
               onClick={() => setDropdownOpen(!dropdownOpen)}
             >
               <div className="user-avatar">
-                {user?.username?.charAt(0).toUpperCase()}
+                {user?.profile_picture ? (
+                  <img src={user.profile_picture} alt="profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                ) : (
+                  user?.username?.charAt(0).toUpperCase()
+                )}
               </div>
               <div className="user-info">
                 <div className="user-name">{user?.username}</div>
@@ -90,11 +101,8 @@ export default function Navbar() {
                   <div className="dropdown-user-role">{roleLabel[user?.role] || user?.role}</div>
                 </div>
 
-                <button className="dropdown-item" onClick={() => { setDropdownOpen(false); }}>
+                <button className="dropdown-item" onClick={() => { setDropdownOpen(false); navigate('/profile'); }}>
                   <User size={15} /> Profile
-                </button>
-                <button className="dropdown-item" onClick={() => { setDropdownOpen(false); navigate('/settings'); }}>
-                  <Settings size={15} /> Settings
                 </button>
                 <div className="dropdown-divider" />
                 <button className="dropdown-item logout" onClick={handleLogout}>

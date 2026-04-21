@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import {
   LayoutDashboard, UserRound, Users, CalendarDays,
-  FileText, CreditCard, ChevronLeft, ChevronRight, Activity
+  FileText, CreditCard, ChevronLeft, ChevronRight, Activity, User as UserIcon
 } from 'lucide-react';
 import '../styles/sidebar.css';
 
@@ -15,18 +15,21 @@ const menuConfig = {
     { label: 'Appointments', path: '/appointments', icon: CalendarDays },
     { label: 'Medical Records', path: '/medical-records', icon: FileText },
     { label: 'Billing', path: '/billing', icon: CreditCard },
+    { label: 'Profile', path: '/profile', icon: UserIcon },
   ],
   doctor: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'My Appointments', path: '/appointments', icon: CalendarDays },
     { label: 'Patients', path: '/patients', icon: Users },
     { label: 'Medical Records', path: '/medical-records', icon: FileText },
+    { label: 'Profile', path: '/profile', icon: UserIcon },
   ],
   reception: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Appointments', path: '/appointments', icon: CalendarDays },
     { label: 'Patients', path: '/patients', icon: Users },
     { label: 'Billing', path: '/billing', icon: CreditCard },
+    { label: 'Profile', path: '/profile', icon: UserIcon },
   ],
 };
 

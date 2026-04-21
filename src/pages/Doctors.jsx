@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search } from 'lucide-react';
 import { doctorsAPI } from '../api/services.js';
+import { useDebounce } from '../hooks/useDebounce.js';
 import { Card, Button, DataTable, Modal, Input, Form, Select, Textarea, Toast } from '../components/UIComponents.jsx';
 import '../styles/crud.css';
 
@@ -7,6 +9,8 @@ export default function Doctors() {
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [modal, setModal] = useState({ isOpen: false, type: 'add', doctor: null });
   const [toast, setToast] = useState(null);
   const [formData, setFormData] = useState({
@@ -19,14 +23,11 @@ export default function Doctors() {
   });
   const [formErrors, setFormErrors] = useState({});
 
-  useEffect(() => {
-    fetchDoctors();
-  }, []);
-
-  const fetchDoctors = async () => {
+  const fetchDoctors = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await doctorsAPI.list();
+      const params = debouncedSearch ? { search: debouncedSearch } : {};
+      const response = await doctorsAPI.list(params);
       setDoctors(response.data);
       setError('');
     } catch (err) {
@@ -35,7 +36,9 @@ export default function Doctors() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch]);
+
+  useEffect(() => { fetchDoctors(); }, [fetchDoctors]);
 
   const handleOpenModal = (type, doctor = null) => {
     if (type === 'add') {
@@ -134,6 +137,20 @@ export default function Doctors() {
       </div>
 
       {error && <div className="error-banner">{error}</div>}
+
+      <div className="page-search-row">
+        <div className="page-search">
+          <Search size={16} className="page-search-icon" />
+          <input
+            placeholder="Search by name, specialization, or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <span className="page-search-count">
+          {loading ? 'Loading...' : `${doctors.length} doctor${doctors.length === 1 ? '' : 's'}`}
+        </span>
+      </div>
 
       <Card>
         <DataTable columns={columns} data={doctors} actions={actions} loading={loading} />

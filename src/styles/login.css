@@ -310,3 +310,34 @@
 @media (max-width: 480px) {
   .login-right { padding: 32px 24px; }
 }
+
+/* Additions for register/forgot/back-link */
+.login-row-between { display: flex; justify-content: flex-end; margin-top: -6px; }
+.login-link {
+  color: var(--primary); font-size: 13px; font-weight: 600;
+  text-decoration: none;
+}
+.login-link:hover { text-decoration: underline; }
+.login-switch {
+  margin-top: 22px; text-align: center; font-size: 13.5px; color: var(--text-muted);
+}
+.login-switch a { color: var(--primary); font-weight: 600; text-decoration: none; }
+.login-switch a:hover { text-decoration: underline; }
+
+/* Aliases for new pages */
+.login-form-wrap { width: 100%; max-width: 420px; }
+.login-form-title { font-size: 1.625rem; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.login-form-sub { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; }
+
+.login-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.login-headline-accent { color: #93c5fd; }
+.login-subtext {
+  font-size: 15px; color: rgba(255,255,255,0.65); line-height: 1.7; margin-bottom: 32px;
+}
+.login-back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 28px;
+  color: rgba(255,255,255,0.7); font-size: 13.5px; font-weight: 500;
+  text-decoration: none;
+}
+.login-back-link:hover { color: white; }

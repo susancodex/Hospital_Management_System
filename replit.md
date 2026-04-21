@@ -36,6 +36,14 @@ A full-stack Hospital Management System built with React (frontend) and Django (
 - **Start application** — `pnpm run dev` on port 5000 (webview)
 - **Backend API** — `python manage.py runserver localhost:8000` (console)
 
+## Features
+
+- **Public Landing page** at `/` (professional hero, features, stats, CTA)
+- **JWT Auth**: Login, Register, Forgot Password (simplified — username + email match resets password without SMTP)
+- **Profile page** at `/profile`: edit name/email/phone, upload profile picture (multipart/form-data → `/media/`), change password
+- **Search**: debounced search bars on Patients, Doctors, Appointments, Medical Records, and Billing pages (uses DRF `search_fields`); global navbar search redirects to `/patients?q=...`
+- **Role-based menus** (admin, doctor, reception)
+
 ## API
 
 - Frontend connects to backend at `http://localhost:8000/api`

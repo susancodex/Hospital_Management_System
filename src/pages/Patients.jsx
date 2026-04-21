@@ -1,12 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import { patientsAPI } from '../api/services.js';
+import { useDebounce } from '../hooks/useDebounce.js';
 import { Card, Button, DataTable, Modal, Input, Form, Textarea, Toast } from '../components/UIComponents.jsx';
 import '../styles/crud.css';
 
 export default function Patients() {
+  const [searchParams] = useSearchParams();
+  const initialQ = searchParams.get('q') || '';
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState(initialQ);
+  const debouncedSearch = useDebounce(search, 300);
   const [modal, setModal] = useState({ isOpen: false, type: 'add', patient: null });
   const [toast, setToast] = useState(null);
   const [formData, setFormData] = useState({
@@ -20,14 +27,11 @@ export default function Patients() {
   });
   const [formErrors, setFormErrors] = useState({});
 
-  useEffect(() => {
-    fetchPatients();
-  }, []);
-
-  const fetchPatients = async () => {
+  const fetchPatients = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await patientsAPI.list();
+      const params = debouncedSearch ? { search: debouncedSearch } : {};
+      const response = await patientsAPI.list(params);
       setPatients(response.data);
       setError('');
     } catch (err) {
@@ -36,7 +40,9 @@ export default function Patients() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch]);
+
+  useEffect(() => { fetchPatients(); }, [fetchPatients]);
 
   const handleOpenModal = (type, patient = null) => {
     if (type === 'add') {
@@ -135,6 +141,20 @@ export default function Patients() {
       </div>
 
       {error && <div className="error-banner">{error}</div>}
+
+      <div className="page-search-row">
+        <div className="page-search">
+          <Search size={16} className="page-search-icon" />
+          <input
+            placeholder="Search by name, email, or phone..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <span className="page-search-count">
+          {loading ? 'Loading...' : `${patients.length} patient${patients.length === 1 ? '' : 's'}`}
+        </span>
+      </div>
 
       <Card>
         <DataTable columns={columns} data={patients} actions={actions} loading={loading} />

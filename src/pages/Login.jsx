@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { useToast } from '../hooks/useToast.js';
 import { Activity, Lock, User, AlertCircle, ArrowRight, Shield, Clock, BarChart2 } from 'lucide-react';
@@ -126,6 +126,10 @@ export default function Login() {
               </div>
             </div>
 
+            <div className="login-row-between">
+              <Link to="/forgot-password" className="login-link">Forgot password?</Link>
+            </div>
+
             <button type="submit" disabled={loading} className="login-submit">
               {loading ? (
                 <>Signing in...</>
@@ -134,6 +138,10 @@ export default function Login() {
               )}
             </button>
           </form>
+
+          <p className="login-switch">
+            Don&apos;t have an account? <Link to="/register">Create one</Link>
+          </p>
 
           <div className="login-demo">
             <div className="login-demo-title">Demo Credentials</div>

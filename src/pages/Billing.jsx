@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search } from 'lucide-react';
 import { billingAPI, patientsAPI, appointmentsAPI } from '../api/services.js';
+import { useDebounce } from '../hooks/useDebounce.js';
 import { Card, Button, DataTable, Modal, Input, Form, Textarea, Toast, StatusBadge } from '../components/UIComponents.jsx';
 import '../styles/crud.css';
 import '../styles/billing.css';
@@ -10,6 +12,8 @@ export default function Billing() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [modal, setModal] = useState({ isOpen: false, type: 'add', bill: null });
   const [toast, setToast] = useState(null);
   const [formData, setFormData] = useState({
@@ -21,13 +25,12 @@ export default function Billing() {
   });
   const [formErrors, setFormErrors] = useState({});
 
-  useEffect(() => { fetchAll(); }, []);
-
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
+      const params = debouncedSearch ? { search: debouncedSearch } : {};
       const [billRes, patientsRes, apptRes] = await Promise.all([
-        billingAPI.list(),
+        billingAPI.list(params),
         patientsAPI.list(),
         appointmentsAPI.list(),
       ]);
@@ -41,7 +44,9 @@ export default function Billing() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const emptyForm = () => ({
     patient: '', appointment: '', amount: '', status: 'unpaid', description: '',
@@ -146,6 +151,20 @@ export default function Billing() {
       </div>
 
       {error && <div className="error-banner">{error}</div>}
+
+      <div className="page-search-row">
+        <div className="page-search">
+          <Search size={16} className="page-search-icon" />
+          <input
+            placeholder="Search by patient, status, or description..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <span className="page-search-count">
+          {loading ? 'Loading...' : `${bills.length} invoice${bills.length === 1 ? '' : 's'}`}
+        </span>
+      </div>
 
       <div className="billing-summary">
         <Card>
