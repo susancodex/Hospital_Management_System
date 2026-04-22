@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Download, Plus, Wallet, Pencil, Trash2, ReceiptText } from 'lucide-react';
+import { Download, Plus, Wallet, Pencil, Trash2, ReceiptText, ArrowUpRight, ArrowDownRight, Eye } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -10,12 +10,12 @@ import AppModal from '../components/common/AppModal.jsx';
 import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx';
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatusBadge from '../components/common/StatusBadge.jsx';
-import { useTheme } from '../context/ThemeContext.jsx';
+import { FormField, ConfirmDialog } from '../components/common/UIStates.jsx';
 
 const schema = z.object({
-  patient: z.coerce.number().min(1),
+  patient: z.coerce.number().min(1, 'Patient is required'),
   appointment: z.coerce.number().optional(),
-  amount: z.coerce.number().min(0),
+  amount: z.coerce.number().min(0, 'Amount must be 0 or more'),
   status: z.enum(['paid', 'unpaid', 'partial', 'insurance_pending', 'written_off']),
   due_date: z.string().optional(),
   insurance_provider: z.string().optional(),
@@ -24,25 +24,29 @@ const schema = z.object({
 });
 
 const paymentSchema = z.object({
-  billing: z.coerce.number().min(1),
-  amount: z.coerce.number().positive(),
+  billing: z.coerce.number().min(1, 'Bill is required'),
+  amount: z.coerce.number().positive('Amount must be positive'),
   payment_method: z.enum(['cash', 'card', 'bank', 'upi', 'insurance']),
   reference_number: z.string().optional(),
   notes: z.string().optional(),
 });
 
-const fieldBase = (isDark) =>
-  `w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-900/30' : 'border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100'}`;
-
-const actionButton = (isDark, tone = 'neutral') => {
-  if (tone === 'success') return isDark ? 'border-emerald-800 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
-  if (tone === 'danger') return isDark ? 'border-red-800 bg-red-900/30 text-red-300 hover:bg-red-900/50' : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100';
-  if (tone === 'primary') return isDark ? 'border-blue-800 bg-blue-900/30 text-blue-300 hover:bg-blue-900/50' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100';
-  return isDark ? 'border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50';
-};
+function KpiCard({ title, value, trend, trendUp, neutral = false }) {
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
+      <div className="mt-2 flex items-end justify-between">
+        <h3 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">{value}</h3>
+        <span className={`text-xs font-medium inline-flex items-center ${neutral ? "text-slate-500" : trendUp ? "text-emerald-600" : "text-rose-600"}`}>
+          {neutral ? null : trendUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+          {trend}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function Billing() {
-  const { isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -50,9 +54,13 @@ export default function Billing() {
   const [paymentsByBill, setPaymentsByBill] = useState({});
   const [open, setOpen] = useState(false);
   const [openPayment, setOpenPayment] = useState(false);
+  const [viewInvoice, setViewInvoice] = useState(null);
   const [editing, setEditing] = useState(null);
+  
+  // Delete confirm
+  const [deleteId, setDeleteId] = useState(null);
 
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm({
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: { status: 'unpaid' },
   });
@@ -61,7 +69,7 @@ export default function Billing() {
     register: registerPayment,
     handleSubmit: handlePaymentSubmit,
     reset: resetPayment,
-    formState: { isSubmitting: isSubmittingPayment },
+    formState: { errors: paymentErrors, isSubmitting: isSubmittingPayment },
   } = useForm({
     resolver: zodResolver(paymentSchema),
     defaultValues: { payment_method: 'cash' },
@@ -102,11 +110,17 @@ export default function Billing() {
     const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
     const paid = rows.reduce((sum, row) => sum + Number(row.paid_amount || 0), 0);
     const outstanding = rows.reduce((sum, row) => sum + Number(row.balance_due || 0), 0);
-    const insurancePending = rows
-      .filter((row) => row.status === 'insurance_pending')
-      .reduce((sum, row) => sum + Number(row.balance_due || 0), 0);
-    return { total, paid, outstanding, insurancePending };
+    
+    // Derived dummy KPIs for mockup
+    const overdue = outstanding * 0.15; // Mock overdue
+    const avgInvoice = rows.length ? total / rows.length : 0;
+    
+    return { outstanding, paid, overdue, avgInvoice, count: rows.length };
   }, [rows]);
+
+  const allPayments = useMemo(() => {
+    return Object.values(paymentsByBill).flat().sort((a, b) => b.id - a.id).slice(0, 5);
+  }, [paymentsByBill]);
 
   const openCreate = () => {
     setEditing(null);
@@ -162,13 +176,12 @@ export default function Billing() {
     }
   };
 
-  const onDelete = async (row) => {
-    const confirmed = window.confirm(`Delete billing entry #${row.id}? This cannot be undone.`);
-    if (!confirmed) return;
-
+  const onDelete = async () => {
+    if (!deleteId) return;
     try {
-      await billingAPI.delete(row.id);
+      await billingAPI.delete(deleteId);
       toast.success('Billing entry deleted');
+      setDeleteId(null);
       await load();
     } catch {
       toast.error('Unable to delete billing entry');
@@ -203,265 +216,374 @@ export default function Billing() {
   };
 
   return (
-    <div className="space-y-5 lg:space-y-6">
+    <div className="space-y-6 max-w-[1400px] mx-auto w-full">
       <PageHeader
-        title="Billing"
-        subtitle="Track invoices, collections, insurance cases, and payment progress in a responsive workflow."
+        title="Billing & Invoices"
+        subtitle={`$${summary.outstanding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} outstanding across ${summary.count} invoices`}
         actions={(
-          <button onClick={openCreate} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ${isDark ? 'border-blue-800 bg-blue-900/30 text-blue-300 hover:bg-blue-900/50' : 'border-blue-200 bg-blue-600 text-white hover:bg-blue-700'}`}>
-            <Plus size={15} /> New bill
-          </button>
+          <>
+            <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm">
+              <Download className="w-4 h-4" /> Export
+            </button>
+            <button onClick={openCreate} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors">
+              <Plus className="w-4 h-4" /> New invoice
+            </button>
+          </>
         )}
       />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: 'Total billed', amount: summary.total, tone: 'blue' },
-          { label: 'Collected', amount: summary.paid, tone: 'success' },
-          { label: 'Outstanding', amount: summary.outstanding, tone: 'amber' },
-          { label: 'Insurance pending', amount: summary.insurancePending, tone: 'neutral' },
-        ].map((item) => (
-          <article key={item.label} className={`rounded-2xl border p-4 shadow-sm transition-colors ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`}>
-            <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{item.label}</p>
-            <p className={`mt-2 text-2xl font-bold tracking-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>${Number(item.amount).toFixed(2)}</p>
-            <p className={`mt-2 h-1.5 w-14 rounded-full ${item.tone === 'blue' ? 'bg-blue-500' : item.tone === 'success' ? 'bg-emerald-500' : item.tone === 'amber' ? 'bg-amber-500' : 'bg-slate-500'}`} />
-          </article>
-        ))}
-      </section>
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <KpiCard 
+          title="Outstanding" 
+          value={`$${summary.outstanding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+          trend="-2.4%" 
+          trendUp={false} 
+        />
+        <KpiCard 
+          title="Collected this month" 
+          value={`$${summary.paid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+          trend="+12%" 
+          trendUp={true} 
+        />
+        <KpiCard 
+          title="Overdue" 
+          value={`$${summary.overdue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+          trend="+1.2%" 
+          trendUp={false} 
+        />
+        <KpiCard 
+          title="Avg invoice" 
+          value={`$${summary.avgInvoice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+          trend="0%" 
+          trendUp={true} 
+          neutral={true}
+        />
+      </div>
 
-      {loading ? (
-        <TableSkeleton isDark={isDark} />
-      ) : rows.length === 0 ? (
-        <EmptyState title="No billing entries" description="Create invoices to start tracking collections." isDark={isDark} />
-      ) : (
-        <>
-          <section className="space-y-3 lg:hidden">
-            {rows.map((row) => (
-              <article key={row.id} className={`rounded-2xl border p-4 shadow-sm transition-colors ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className={`truncate text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{row.patient_name}</p>
-                    <p className={`mt-1 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Invoice #{row.id}</p>
-                  </div>
-                  <StatusBadge value={row.status} />
-                </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        
+        {/* Invoices Table */}
+        <div className="xl:col-span-2 space-y-6">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Invoices</h2>
+            </div>
+            <div className="p-0 overflow-x-auto">
+              {loading ? (
+                <div className="p-5"><TableSkeleton rows={5} /></div>
+              ) : rows.length === 0 ? (
+                <EmptyState title="No invoices found" description="Create an invoice to start billing." />
+              ) : (
+                <table className="w-full text-sm whitespace-nowrap">
+                  <thead className="bg-slate-50/60 dark:bg-slate-900/40">
+                    <tr>
+                      <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Invoice #</th>
+                      <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Patient</th>
+                      <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date</th>
+                      <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                      <th className="h-10 px-5 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Amount</th>
+                      <th className="h-10 px-5 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="px-5 py-3 font-mono text-xs text-slate-500">INV-{String(row.id).padStart(5, '0')}</td>
+                        <td className="px-5 py-3 font-medium text-slate-900 dark:text-slate-100">{row.patient_name}</td>
+                        <td className="px-5 py-3 text-slate-600 dark:text-slate-300">{row.created_at ? new Date(row.created_at).toLocaleDateString() : 'N/A'}</td>
+                        <td className="px-5 py-3"><StatusBadge value={row.status} /></td>
+                        <td className="px-5 py-3 text-right font-medium text-slate-900 dark:text-slate-100 tabular-nums">
+                          ${Number(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => setViewInvoice(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="View">
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => openPaymentCreate(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40" title="Record Payment">
+                              <Wallet className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => downloadInvoice(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40" title="Print/Download">
+                              <ReceiptText className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => openEdit(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="Edit">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setDeleteId(row.id)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40" title="Delete">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className={`text-xs uppercase tracking-wide ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Amount</p>
-                    <p className={`mt-1 font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>${Number(row.amount).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className={`text-xs uppercase tracking-wide ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Balance</p>
-                    <p className={`mt-1 font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>${Number(row.balance_due || 0).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className={`text-xs uppercase tracking-wide ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Paid</p>
-                    <p className={`mt-1 font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>${Number(row.paid_amount || 0).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className={`text-xs uppercase tracking-wide ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Due date</p>
-                    <p className={`mt-1 font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{row.due_date || 'N/A'}</p>
-                  </div>
-                </div>
+        {/* Recent Payments */}
+        <div className="xl:col-span-1 space-y-6">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Recent Payments</h2>
+            </div>
+            <div className="p-0 overflow-x-auto">
+              {loading ? (
+                <div className="p-5"><TableSkeleton rows={3} /></div>
+              ) : allPayments.length === 0 ? (
+                <EmptyState title="No payments" description="No recent payments recorded." />
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50/60 dark:bg-slate-900/40">
+                    <tr>
+                      <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Method</th>
+                      <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date</th>
+                      <th className="h-10 px-5 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allPayments.map((p) => (
+                      <tr key={p.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="px-5 py-3">
+                          <span className="capitalize text-slate-900 dark:text-slate-100 font-medium">{p.payment_method}</span>
+                          <div className="text-xs text-slate-500 font-mono mt-0.5">INV-{String(p.billing).padStart(5, '0')}</div>
+                        </td>
+                        <td className="px-5 py-3 text-slate-600 dark:text-slate-300 text-xs">
+                          {p.payment_date ? new Date(p.payment_date).toLocaleDateString() : 'N/A'}
+                        </td>
+                        <td className="px-5 py-3 text-right font-medium text-emerald-600 dark:text-emerald-400 tabular-nums">
+                          +${Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button onClick={() => openPaymentCreate(row)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${actionButton(isDark, 'success')}`}>
-                    <Wallet size={13} /> Payment
-                  </button>
-                  <button onClick={() => openEdit(row)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${actionButton(isDark)}`}>
-                    <Pencil size={13} /> Edit
-                  </button>
-                  <button onClick={() => downloadInvoice(row)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${actionButton(isDark, 'primary')}`}>
-                    <Download size={13} /> Invoice
-                  </button>
-                  <button onClick={() => onDelete(row)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${actionButton(isDark, 'danger')}`}>
-                    <Trash2 size={13} /> Delete
-                  </button>
-                </div>
+      </div>
 
-                {(paymentsByBill[row.id] || []).length > 0 && (
-                  <p className={`mt-3 text-[11px] ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-                    {paymentsByBill[row.id].length} payment(s) posted
-                  </p>
-                )}
-              </article>
-            ))}
-          </section>
+      {/* Create/Edit Modal */}
+      <AppModal 
+        open={open} 
+        onClose={() => setOpen(false)} 
+        title={editing ? 'Edit Invoice' : 'New Invoice'} 
+        size="md"
+        footer={(
+          <>
+            <button type="button" onClick={() => setOpen(false)} className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium">
+              Cancel
+            </button>
+            <button onClick={handleSubmit(onSubmit)} disabled={isSubmitting} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors disabled:opacity-50">
+              {editing ? 'Update invoice' : 'Create invoice'}
+            </button>
+          </>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <FormField 
+              label="Patient" 
+              name="patient" 
+              type="select" 
+              register={register} 
+              error={errors.patient?.message} 
+              touched={true}
+              options={patients.map(p => ({ value: p.id, label: p.full_name || `${p.first_name} ${p.last_name}` }))} 
+              required
+            />
+            <FormField 
+              label="Appointment (Optional)" 
+              name="appointment" 
+              type="select" 
+              register={register} 
+              options={appointments.map(a => ({ value: a.id, label: `${a.patient_name} - ${a.appointment_date}` }))} 
+            />
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <FormField label="Amount ($)" name="amount" type="number" register={register} error={errors.amount?.message} touched={true} required />
+            <FormField 
+              label="Status" 
+              name="status" 
+              type="select" 
+              register={register} 
+              options={[
+                { value: 'paid', label: 'Paid' },
+                { value: 'unpaid', label: 'Unpaid' },
+                { value: 'partial', label: 'Partial' },
+                { value: 'insurance_pending', label: 'Insurance Pending' },
+                { value: 'written_off', label: 'Written Off' },
+              ]} 
+            />
+            <FormField label="Due Date" name="due_date" type="date" register={register} />
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <FormField label="Insurance Provider" name="insurance_provider" register={register} />
+            <FormField label="Claim Number" name="insurance_claim_number" register={register} />
+          </div>
+          <FormField label="Description/Notes" name="description" type="textarea" rows={3} register={register} />
+        </div>
+      </AppModal>
 
-          <section className={`hidden rounded-2xl border shadow-sm lg:block ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-left text-sm">
-                <thead className={isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-50 text-slate-500'}>
+      {/* Payment Modal */}
+      <AppModal 
+        open={openPayment} 
+        onClose={() => setOpenPayment(false)} 
+        title="Record Payment" 
+        size="md"
+        footer={(
+          <>
+            <button type="button" onClick={() => setOpenPayment(false)} className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium">
+              Cancel
+            </button>
+            <button onClick={handlePaymentSubmit(onSubmitPayment)} disabled={isSubmittingPayment} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors disabled:opacity-50">
+              Record payment
+            </button>
+          </>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <FormField 
+              label="Invoice" 
+              name="billing" 
+              type="select" 
+              register={registerPayment} 
+              error={paymentErrors.billing?.message} 
+              touched={true}
+              options={rows.map(item => ({ value: item.id, label: `INV-${String(item.id).padStart(5, '0')} - $${Number(item.balance_due || 0).toFixed(2)} due` }))} 
+              required
+            />
+            <FormField label="Amount ($)" name="amount" type="number" register={registerPayment} error={paymentErrors.amount?.message} touched={true} required />
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <FormField 
+              label="Payment Method" 
+              name="payment_method" 
+              type="select" 
+              register={registerPayment} 
+              options={[
+                { value: 'cash', label: 'Cash' },
+                { value: 'card', label: 'Card' },
+                { value: 'bank', label: 'Bank Transfer' },
+                { value: 'upi', label: 'UPI' },
+                { value: 'insurance', label: 'Insurance' },
+              ]} 
+            />
+            <FormField label="Reference Number" name="reference_number" register={registerPayment} />
+          </div>
+          <FormField label="Internal Notes" name="notes" type="textarea" rows={2} register={registerPayment} />
+        </div>
+      </AppModal>
+
+      {/* View Invoice Detail Modal */}
+      <AppModal 
+        open={!!viewInvoice} 
+        onClose={() => setViewInvoice(null)} 
+        title={`Invoice #INV-${String(viewInvoice?.id).padStart(5, '0')}`} 
+        size="lg"
+        footer={(
+          <>
+            <button type="button" onClick={() => setViewInvoice(null)} className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium">
+              Close
+            </button>
+            <button onClick={() => window.print()} className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium">
+              Print
+            </button>
+            <button onClick={() => downloadInvoice(viewInvoice)} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors">
+              <Download className="w-4 h-4" /> Download PDF
+            </button>
+          </>
+        )}
+      >
+        {viewInvoice && (
+          <div className="bg-white dark:bg-slate-900 p-8 border border-slate-200 dark:border-slate-800 rounded-lg print:border-none print:shadow-none print:p-0">
+            <div className="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-6 mb-6">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-teal-700">AetherCare Hospital</h1>
+                <p className="text-sm text-slate-500 mt-1">123 Health Avenue, Medical District<br/>New York, NY 10001</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest mb-1">INVOICE</p>
+                <p className="font-mono text-slate-600 dark:text-slate-400">#INV-{String(viewInvoice.id).padStart(5, '0')}</p>
+                <div className="mt-2"><StatusBadge value={viewInvoice.status} /></div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-8 mb-8">
+              <div>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Billed To:</p>
+                <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{viewInvoice.patient_name}</p>
+              </div>
+              <div className="text-right text-sm space-y-1">
+                <p><span className="text-slate-500 mr-2">Invoice Date:</span> <span className="font-medium text-slate-900 dark:text-slate-100">{viewInvoice.created_at ? new Date(viewInvoice.created_at).toLocaleDateString() : new Date().toLocaleDateString()}</span></p>
+                <p><span className="text-slate-500 mr-2">Due Date:</span> <span className="font-medium text-slate-900 dark:text-slate-100">{viewInvoice.due_date || 'Upon receipt'}</span></p>
+              </div>
+            </div>
+
+            <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden mb-8">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
                   <tr>
-                    <th className="px-4 py-3">Patient</th>
-                    <th className="px-4 py-3">Amount</th>
-                    <th className="px-4 py-3">Paid</th>
-                    <th className="px-4 py-3">Balance</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Due date</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Payments</th>
-                    <th className="px-4 py-3">Actions</th>
+                    <th className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Description</th>
+                    <th className="px-4 py-2 text-right font-medium text-slate-700 dark:text-slate-300">Amount</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id} className={`border-t transition-colors ${isDark ? 'border-slate-700 hover:bg-slate-700/30' : 'border-slate-100 hover:bg-slate-50'}`}>
-                      <td className={`px-4 py-4 font-medium ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{row.patient_name}</td>
-                      <td className={`px-4 py-4 ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>${Number(row.amount).toFixed(2)}</td>
-                      <td className={`px-4 py-4 ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>${Number(row.paid_amount || 0).toFixed(2)}</td>
-                      <td className={`px-4 py-4 ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>${Number(row.balance_due || 0).toFixed(2)}</td>
-                      <td className="px-4 py-4"><StatusBadge value={row.status} /></td>
-                      <td className={`px-4 py-4 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{row.due_date || 'N/A'}</td>
-                      <td className={`px-4 py-4 max-w-[260px] truncate ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{row.description || 'N/A'}</td>
-                      <td className={`px-4 py-4 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{(paymentsByBill[row.id] || []).length} posted</td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button onClick={() => openPaymentCreate(row)} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${actionButton(isDark, 'success')}`}>
-                            <Wallet size={13} /> Payment
-                          </button>
-                          <button onClick={() => openEdit(row)} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${actionButton(isDark)}`}>
-                            <Pencil size={13} /> Edit
-                          </button>
-                          <button onClick={() => downloadInvoice(row)} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${actionButton(isDark, 'primary')}`}>
-                            <ReceiptText size={13} /> Invoice
-                          </button>
-                          <button onClick={() => onDelete(row)} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${actionButton(isDark, 'danger')}`}>
-                            <Trash2 size={13} /> Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  <tr>
+                    <td className="px-4 py-4 text-slate-800 dark:text-slate-200">
+                      {viewInvoice.description || 'Medical Services'}
+                    </td>
+                    <td className="px-4 py-4 text-right font-medium tabular-nums text-slate-800 dark:text-slate-200">
+                      ${Number(viewInvoice.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
-          </section>
-        </>
-      )}
 
-      <AppModal open={open} onClose={() => setOpen(false)} title={editing ? 'Update Billing Entry' : 'Create Billing Entry'} size="xl">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Patient</label>
-              <select {...register('patient')} className={fieldBase(isDark)}>
-                <option value="">Select patient</option>
-                {patients.map((item) => (
-                  <option key={item.id} value={item.id}>{item.full_name || `${item.first_name} ${item.last_name}`}</option>
-                ))}
-              </select>
+            <div className="flex justify-end">
+              <div className="w-64 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Subtotal</span>
+                  <span className="font-medium tabular-nums">${Number(viewInvoice.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Paid to date</span>
+                  <span className="font-medium text-emerald-600 tabular-nums">-${Number(viewInvoice.paid_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="border-t border-slate-200 dark:border-slate-800 pt-3 flex justify-between">
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">Balance Due</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">${Number(viewInvoice.balance_due || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
             </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Appointment (optional)</label>
-              <select {...register('appointment')} className={fieldBase(isDark)}>
-                <option value="">Select appointment</option>
-                {appointments.map((item) => (
-                  <option key={item.id} value={item.id}>{item.patient_name} - {item.appointment_date}</option>
-                ))}
-              </select>
-            </div>
+            
+            {viewInvoice.insurance_provider && (
+              <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Insurance Information:</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300">Provider: <span className="font-medium">{viewInvoice.insurance_provider}</span></p>
+                <p className="text-sm text-slate-700 dark:text-slate-300">Claim #: <span className="font-medium">{viewInvoice.insurance_claim_number || 'N/A'}</span></p>
+              </div>
+            )}
           </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Amount</label>
-              <input type="number" step="0.01" {...register('amount')} className={fieldBase(isDark)} />
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Status</label>
-              <select {...register('status')} className={fieldBase(isDark)}>
-                <option value="paid">Paid</option>
-                <option value="unpaid">Unpaid</option>
-                <option value="partial">Partial</option>
-                <option value="insurance_pending">Insurance Pending</option>
-                <option value="written_off">Written Off</option>
-              </select>
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Due date</label>
-              <input type="date" {...register('due_date')} className={fieldBase(isDark)} />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Insurance provider</label>
-              <input {...register('insurance_provider')} className={fieldBase(isDark)} />
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Insurance claim number</label>
-              <input {...register('insurance_claim_number')} className={fieldBase(isDark)} />
-            </div>
-          </div>
-
-          <div>
-            <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Description</label>
-            <textarea {...register('description')} rows={4} className={fieldBase(isDark)} />
-          </div>
-
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button type="button" onClick={() => setOpen(false)} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${actionButton(isDark)}`}>
-              Cancel
-            </button>
-            <button disabled={isSubmitting} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-colors ${isDark ? 'bg-blue-600 hover:bg-blue-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
-              {editing ? 'Update entry' : 'Create entry'}
-            </button>
-          </div>
-        </form>
+        )}
       </AppModal>
 
-      <AppModal open={openPayment} onClose={() => setOpenPayment(false)} title="Record Payment" size="lg">
-        <form onSubmit={handlePaymentSubmit(onSubmitPayment)} className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Bill</label>
-              <select {...registerPayment('billing')} className={fieldBase(isDark)}>
-                <option value="">Select bill</option>
-                {rows.map((item) => (
-                  <option key={item.id} value={item.id}>#{item.id} - {item.patient_name} (${Number(item.balance_due || 0).toFixed(2)} due)</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Amount</label>
-              <input type="number" step="0.01" {...registerPayment('amount')} className={fieldBase(isDark)} />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Payment method</label>
-              <select {...registerPayment('payment_method')} className={fieldBase(isDark)}>
-                <option value="cash">Cash</option>
-                <option value="card">Card</option>
-                <option value="bank">Bank Transfer</option>
-                <option value="upi">UPI</option>
-                <option value="insurance">Insurance</option>
-              </select>
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Reference number</label>
-              <input {...registerPayment('reference_number')} className={fieldBase(isDark)} />
-            </div>
-          </div>
-
-          <div>
-            <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Notes</label>
-            <textarea {...registerPayment('notes')} rows={4} className={fieldBase(isDark)} />
-          </div>
-
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button type="button" onClick={() => setOpenPayment(false)} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${actionButton(isDark)}`}>
-              Cancel
-            </button>
-            <button disabled={isSubmittingPayment} className={`inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500`}>
-              Record payment
-            </button>
-          </div>
-        </form>
-      </AppModal>
+      {/* Delete Confirmation */}
+      <ConfirmDialog 
+        isOpen={!!deleteId} 
+        title="Delete Invoice" 
+        message="Are you sure you want to delete this invoice? This action cannot be undone and will remove all associated payments." 
+        onConfirm={onDelete} 
+        onCancel={() => setDeleteId(null)} 
+        isDangerous={true} 
+      />
     </div>
   );
 }

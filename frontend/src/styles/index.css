@@ -1,60 +1,38 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 :root {
-  /* Light theme */
-  --primary: #2563eb;
-  --background: #f8fafc;
-  --sidebar: #0f172a;
-  --success: #22c55e;
-  --error: #ef4444;
-  
-  /* Extended light theme */
-  --bg-primary: #f8fafc;
-  --bg-secondary: #f1f5f9;
-  --bg-tertiary: #e2e8f0;
-  --bg-card: #ffffff;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
+  --accent: #0f766e;
+  --accent-strong: #115e59;
+  --bg: #f8fafc;
+  --surface: #ffffff;
   --border: #e2e8f0;
-  --shadow: rgba(0, 0, 0, 0.1);
+  --text: #0f172a;
+  --text-muted: #64748b;
 }
 
 html.dark {
-  /* Dark theme */
-  --primary: #3b82f6;
-  --background: #0f172a;
-  --sidebar: #1e293b;
-  --success: #22c55e;
-  --error: #ef4444;
-  
-  /* Extended dark theme */
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
-  --bg-card: #1e293b;
-  --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
+  --accent: #2dd4bf;
+  --accent-strong: #14b8a6;
+  --bg: #020617;
+  --surface: #0f172a;
+  --border: #1e293b;
+  --text: #f1f5f9;
   --text-muted: #94a3b8;
-  --border: #334155;
-  --shadow: rgba(0, 0, 0, 0.3);
 }
 
 * {
   box-sizing: border-box;
 }
 
-body {
+html, body {
   margin: 0;
   min-height: 100vh;
-  font-family: 'Inter', 'Geist', sans-serif;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 16px;
-  line-height: 1.65;
-  font-weight: 400;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -63,86 +41,47 @@ body {
   min-height: 100vh;
 }
 
-.font-heading {
-  font-family: 'Geist', 'Inter', sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-input,
-textarea,
-select,
-button {
-  font: inherit;
-  color: var(--text-primary);
-}
-
-label {
-  color: var(--text-secondary);
-}
-
 ::placeholder {
-  color: var(--text-muted);
+  color: #94a3b8;
   opacity: 1;
 }
 
-table {
-  color: var(--text-primary);
+/* Tighter, calmer focus for the Clinical look */
+:focus-visible {
+  outline: none;
 }
 
-th {
-  color: var(--text-secondary);
-  font-weight: 700;
+/* Scrollbars: thin and neutral */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-td {
-  color: var(--text-primary);
+/* Numerals align in tables */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
-html.dark .bg-white,
-html.dark .bg-slate-50,
-html.dark .bg-slate-100 {
-  background-color: var(--bg-card);
-}
-
-html.dark .border-slate-100,
-html.dark .border-slate-200,
-html.dark .border-slate-300 {
-  border-color: var(--border);
-}
-
-html.dark .text-slate-900,
-html.dark .text-slate-800 {
-  color: var(--text-primary);
-}
-
-html.dark .text-slate-700 {
-  color: var(--text-secondary);
-}
-
-html.dark .text-slate-600 {
-  color: #cbd5e1;
-}
-
-html.dark .text-slate-500 {
-  color: var(--text-muted);
-}
-
-html.dark .text-slate-400 {
-  color: #94a3b8;
-}
-
+/* Subtle rise-in for page mount */
 @keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-rise {
+  animation: rise 0.35s ease-out both;
 }
 
-.animate-rise {
-  animation: rise 0.45s ease-out both;
+/* iOS safe-area helper used by BottomNav */
+.safe-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }

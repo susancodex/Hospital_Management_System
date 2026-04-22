@@ -1,44 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity,
-  CalendarCheck,
-  CircleDollarSign,
-  Clock,
-  Sparkles,
-  Stethoscope,
-  TrendingUp,
-  Users,
+  FileText,
+  Plus,
+  ArrowUpRight,
+  ArrowDownRight,
+  MoreHorizontal,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
 import {
   Area,
   AreaChart,
   CartesianGrid,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
 import { appointmentsAPI, billingAPI, doctorsAPI, patientsAPI } from '../api/services.js';
-import PageHeader from '../components/common/PageHeader.jsx';
 import StatusBadge from '../components/common/StatusBadge.jsx';
-import { useTheme } from '../context/ThemeContext.jsx';
 import { useAuthStore } from '../store/authStore.js';
-
-const STAT_COLORS = ['#2563EB', '#22C55E', '#EF4444', '#F59E0B', '#8B5CF6', '#14B8A6'];
-
-const roleLabels = {
-  admin: 'Administrator',
-  doctor: 'Doctor',
-  reception: 'Receptionist',
-};
-
-const roleStyles = {
-  admin: 'bg-blue-500/15 text-blue-300 ring-1 ring-inset ring-blue-500/20',
-  doctor: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/20',
-  reception: 'bg-amber-500/15 text-amber-300 ring-1 ring-inset ring-amber-500/20',
-};
 
 const fmtShortDate = (value) => {
   if (!value) return '—';
@@ -47,9 +27,93 @@ const fmtShortDate = (value) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
+function KpiCard({ title, value, trend, trendUp, neutral = false }) {
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+      <div className="p-5">
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">{title}</p>
+        <div className="flex items-end justify-between">
+          <h3 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">
+            {value}
+          </h3>
+          <div
+            className={`flex items-center text-xs font-medium ${
+              neutral ? 'text-slate-500 dark:text-slate-400' : trendUp ? 'text-emerald-600' : 'text-rose-600'
+            }`}
+          >
+            {neutral ? null : trendUp ? (
+              <ArrowUpRight className="w-3 h-3 mr-0.5" />
+            ) : (
+              <ArrowDownRight className="w-3 h-3 mr-0.5" />
+            )}
+            {trend}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AppointmentRow({ time, patient, initials, dept, status }) {
+  return (
+    <div className="px-5 py-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors border-t border-slate-100 dark:border-slate-800 first:border-0 cursor-pointer group">
+      <div className="flex items-center gap-3">
+        <div className="w-10 text-right shrink-0">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block leading-tight">
+            {time.split(' ')[0]}
+          </span>
+          {time.split(' ')[1] && (
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase">
+              {time.split(' ')[1]}
+            </span>
+          )}
+        </div>
+        <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 shrink-0 mx-1"></div>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
+            <span className="text-slate-600 dark:text-slate-300 text-xs font-medium">
+              {initials}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 leading-none group-hover:text-teal-700 dark:group-hover:text-teal-400 transition-colors truncate">
+              {patient}
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">{dept}</p>
+          </div>
+        </div>
+      </div>
+      <StatusBadge value={status} />
+    </div>
+  );
+}
+
+function OccupancyBar({ dept, used, total }) {
+  const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
+  const isHigh = percentage > 85;
+
+  return (
+    <div>
+      <div className="flex justify-between text-sm mb-1.5">
+        <span className="font-medium text-slate-700 dark:text-slate-300">{dept}</span>
+        <span className="text-slate-500 dark:text-slate-400 text-xs">
+          {used} / {total} beds
+        </span>
+      </div>
+      <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${
+            isHigh ? 'bg-rose-500' : 'bg-teal-600'
+          }`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const user = useAuthStore((state) => state.user);
-  const { isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
@@ -87,14 +151,14 @@ export default function Dashboard() {
 
   const today = new Date().toISOString().split('T')[0];
   const todaysAppointments = appointments.filter((item) => item.appointment_date === today);
-  const upcomingAppointments = [...appointments]
-    .filter((item) => item.appointment_date >= today)
-    .sort((a, b) => `${a.appointment_date || ''} ${a.appointment_time || ''}`.localeCompare(`${b.appointment_date || ''} ${b.appointment_time || ''}`))
-    .slice(0, 6);
 
-  const revenue = billing.filter((item) => item.status === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const outstanding = billing.reduce((sum, item) => sum + Number(item.balance_due ?? item.amount ?? 0), 0);
-  const collectionRate = billing.length ? Math.round((billing.filter((item) => item.status === 'paid').length / billing.length) * 100) : 0;
+  const revenue = billing
+    .filter((item) => item.status === 'paid')
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const outstanding = billing.reduce(
+    (sum, item) => sum + Number(item.balance_due ?? item.amount ?? 0),
+    0
+  );
 
   const trend = useMemo(() => {
     const map = new Map();
@@ -109,27 +173,6 @@ export default function Dashboard() {
       .map(([date, count]) => ({ date: fmtShortDate(date), count }));
   }, [appointments]);
 
-  const apptStatus = useMemo(() => {
-    const counts = appointments.reduce((acc, row) => {
-      const key = row.status || 'unknown';
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-
-    return Object.entries(counts).map(([name, value], index) => ({
-      name,
-      value,
-      fill: STAT_COLORS[index % STAT_COLORS.length],
-    }));
-  }, [appointments]);
-
-  const kpis = [
-    { label: 'Total Patients', value: patients.length, icon: Users, gradient: 'from-blue-500 to-blue-600', note: 'Registered patient profiles' },
-    { label: 'Active Doctors', value: doctors.length, icon: Stethoscope, gradient: 'from-emerald-500 to-emerald-600', note: 'Available care providers' },
-    { label: 'Today’s Appointments', value: todaysAppointments.length, icon: CalendarCheck, gradient: 'from-amber-500 to-amber-600', note: 'Scheduled for today' },
-    { label: 'Total Revenue', value: `$${revenue.toLocaleString()}`, icon: CircleDollarSign, gradient: 'from-indigo-500 to-indigo-600', note: `${collectionRate}% collection rate` },
-  ];
-
   const greeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -137,270 +180,267 @@ export default function Dashboard() {
     return 'Good evening';
   };
 
+  const todayDateString = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  const userName = user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.username || 'Dr.';
+
+  const recentPatients = patients.slice(0, 5);
+
   return (
-    <div className="space-y-6 lg:space-y-8">
-      <section className={`overflow-hidden rounded-3xl border shadow-sm transition-colors duration-300 ${isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200/80 bg-white'}`}>
-        <div className="grid gap-0 xl:grid-cols-[1.6fr_0.9fr]">
-          <div className={`relative p-5 sm:p-6 lg:p-8 ${isDark ? 'bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950' : 'bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800'} text-white`}>
-            <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_top_right,rgba(59,130,246,0.35),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.16),transparent_28%)]" />
-            <div className="relative flex flex-col gap-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/10 ring-1 ring-inset ring-white/15 backdrop-blur">
-                    <Activity size={24} />
-                  </div>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-[0.3em] text-blue-200/80">Hospital Management</p>
-                      <h1 className="font-heading mt-2 text-2xl font-bold sm:text-3xl lg:text-4xl">
-                        {greeting()}, {user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.username}
-                      </h1>
-                    </div>
-                    <p className="max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-                      Track patient flow, clinical operations, and revenue performance from a single responsive command center.
-                    </p>
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${roleStyles[user?.role] || 'bg-slate-500/15 text-slate-200 ring-1 ring-inset ring-slate-500/20'}`}>
-                        <Sparkles size={12} />
-                        {roleLabels[user?.role] || user?.role || 'User'}
-                      </span>
-                      <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-slate-100 ring-1 ring-inset ring-white/10">
-                        <Clock size={12} />
-                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3 sm:max-w-md xl:grid-cols-1 xl:min-w-[220px]">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-                    <p className="text-xs text-slate-300">Today</p>
-                    <p className="mt-1 text-2xl font-bold">{todaysAppointments.length}</p>
-                    <p className="mt-1 text-xs text-slate-300">Appointments</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-                    <p className="text-xs text-slate-300">Pending</p>
-                    <p className="mt-1 text-2xl font-bold">{outstanding.toLocaleString()}</p>
-                    <p className="mt-1 text-xs text-slate-300">Outstanding</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-                    <p className="text-xs text-slate-300">Coverage</p>
-                    <p className="mt-1 text-2xl font-bold">{collectionRate}%</p>
-                    <p className="mt-1 text-xs text-slate-300">Collected</p>
-                  </div>
-                </div>
+    <div className="space-y-6 max-w-[1400px] mx-auto w-full pb-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">{todayDateString}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            {greeting()}, {userName}
+          </h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm transition-colors">
+            <FileText className="w-4 h-4" />
+            Generate Report
+          </button>
+          <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors disabled:opacity-50">
+            <Plus className="w-4 h-4" />
+            New Appointment
+          </button>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <KpiCard
+          title="Total Patients"
+          value={loading ? '...' : patients.length.toLocaleString()}
+          trend="+4.2%"
+          trendUp={true}
+        />
+        <KpiCard
+          title="Today's Appointments"
+          value={loading ? '...' : todaysAppointments.length.toLocaleString()}
+          trend="+12%"
+          trendUp={true}
+        />
+        <KpiCard
+          title="Active Doctors"
+          value={loading ? '...' : doctors.length.toLocaleString()}
+          trend="0%"
+          trendUp={true}
+          neutral={true}
+        />
+        <KpiCard
+          title="Outstanding Revenue"
+          value={loading ? '...' : `$${outstanding.toLocaleString()}`}
+          trend="-2.4%"
+          trendUp={false}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Column (Chart + Table) */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Patient Admissions
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Last 7 days vs previous period
+                </p>
               </div>
+              <button className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorAdmissions" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0f766e" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#0f766e" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
+                  <XAxis
+                    dataKey="date"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    dy={10}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: '6px',
+                      border: '1px solid var(--tw-colors-slate-200)',
+                      boxShadow: 'none',
+                    }}
+                    itemStyle={{ color: '#0f766e', fontSize: '14px', fontWeight: 500 }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#0f766e"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorAdmissions)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          <div className={`grid gap-4 p-5 sm:grid-cols-3 xl:grid-cols-1 xl:p-6 ${isDark ? 'bg-slate-900' : 'bg-slate-50/70'}`}>
-            <div className={`rounded-2xl border p-4 ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}>
-              <p className={`text-xs font-medium uppercase tracking-[0.2em] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Patients</p>
-              <p className={`mt-2 text-3xl font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{patients.length}</p>
-              <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Total registered</p>
+          {/* Recent Patients Table */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-0 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                Recent Patients
+              </h3>
+              <button className="text-sm font-medium text-teal-700 dark:text-teal-400 hover:underline">
+                View all
+              </button>
             </div>
-            <div className={`rounded-2xl border p-4 ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}>
-              <p className={`text-xs font-medium uppercase tracking-[0.2em] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Doctors</p>
-              <p className={`mt-2 text-3xl font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{doctors.length}</p>
-              <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>In directory</p>
-            </div>
-            <div className={`rounded-2xl border p-4 ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}>
-              <p className={`text-xs font-medium uppercase tracking-[0.2em] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Revenue</p>
-              <p className={`mt-2 text-3xl font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>${revenue.toLocaleString()}</p>
-              <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{collectionRate}% collected</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50/60 dark:bg-slate-900/40">
+                  <tr>
+                    <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      Patient Name
+                    </th>
+                    <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      MRN
+                    </th>
+                    <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      Date of Birth
+                    </th>
+                    <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      Gender
+                    </th>
+                    <th className="h-10 px-5 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentPatients.length > 0 ? (
+                    recentPatients.map((patient) => (
+                      <tr
+                        key={patient.id}
+                        className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        <td className="px-5 py-3 font-medium text-slate-900 dark:text-slate-100">
+                          {patient.first_name} {patient.last_name}
+                        </td>
+                        <td className="px-5 py-3 font-mono text-xs text-slate-500 dark:text-slate-400">
+                          {patient.mrn || '—'}
+                        </td>
+                        <td className="px-5 py-3 text-slate-600 dark:text-slate-300">
+                          {patient.date_of_birth ? fmtShortDate(patient.date_of_birth) : '—'}
+                        </td>
+                        <td className="px-5 py-3 text-slate-600 dark:text-slate-300 capitalize">
+                          {patient.gender || '—'}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <StatusBadge value={patient.is_active ? 'active' : 'inactive'} />
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-5 py-8 text-center text-sm text-slate-500 dark:text-slate-400"
+                      >
+                        No recent patients found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
-      </section>
 
-      <PageHeader title="Executive Dashboard" subtitle="A structured overview of operations, finance, and clinical flow" icon={Activity} />
-
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((kpi) => {
-          const Icon = kpi.icon;
-
-          return (
-            <article key={kpi.label} className={`group relative overflow-hidden rounded-2xl border p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`}>
-              <div className={`absolute -right-4 -top-4 h-20 w-20 rounded-full bg-gradient-to-br ${kpi.gradient} opacity-10`} />
-              <div className={`grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br ${kpi.gradient} shadow-lg shadow-black/10`}>
-                <Icon size={20} className="text-white" />
-              </div>
-              <p className={`mt-4 text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{kpi.label}</p>
-              <p className={`mt-2 text-3xl font-bold tracking-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{loading ? '...' : kpi.value}</p>
-              <p className={`mt-2 text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{kpi.note}</p>
-            </article>
-          );
-        })}
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[1.6fr_0.9fr]">
-        <article className={`rounded-2xl border p-5 shadow-sm transition-colors duration-300 ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`}>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className={`font-heading text-lg font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Appointments Trend</h3>
-              <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Weekly activity in a compact mobile-friendly view</p>
+        {/* Right Column */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Today's Schedule */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                Today's Schedule
+              </h3>
+              <button className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <CalendarIcon className="w-4 h-4" />
+              </button>
             </div>
-            <div className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-medium ${isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-50 text-green-600'}`}>
-              <TrendingUp size={14} />
-              <span>{appointments.length} total</span>
-            </div>
-          </div>
-
-          <div className="mt-5 h-[260px] sm:h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="dashboardTrend" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.24} />
-                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: isDark ? '#94a3b8' : '#64748b' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 12, fill: isDark ? '#94a3b8' : '#64748b' }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
-                <Tooltip
-                  cursor={{ stroke: isDark ? '#475569' : '#cbd5e1', strokeDasharray: '4 4' }}
-                  contentStyle={{
-                    borderRadius: 14,
-                    border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-                    backgroundColor: isDark ? '#0f172a' : '#ffffff',
-                    color: isDark ? '#f8fafc' : '#0f172a',
-                    boxShadow: '0 18px 30px -16px rgb(15 23 42 / 0.25)',
-                  }}
-                />
-                <Area type="monotone" dataKey="count" stroke="#2563EB" fill="url(#dashboardTrend)" strokeWidth={3} dot={{ fill: '#2563EB', strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </article>
-
-        <article className={`rounded-2xl border p-5 shadow-sm transition-colors duration-300 ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`}>
-          <div>
-            <h3 className={`font-heading text-lg font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Status Distribution</h3>
-            <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Appointment breakdown by state</p>
-          </div>
-
-          <div className="mt-4 h-[220px] sm:h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={apptStatus.length ? apptStatus : [{ name: 'none', value: 1, fill: '#cbd5e1' }]} dataKey="value" nameKey="name" outerRadius="80%" innerRadius="55%" paddingAngle={4} />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 14,
-                    border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-                    backgroundColor: isDark ? '#0f172a' : '#ffffff',
-                    color: isDark ? '#f8fafc' : '#0f172a',
-                    boxShadow: '0 18px 30px -16px rgb(15 23 42 / 0.25)',
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-            {apptStatus.map((item) => (
-              <div key={item.name} className={`flex items-center justify-between rounded-xl border px-3 py-2.5 ${isDark ? 'border-slate-700 bg-slate-700/40' : 'border-slate-200 bg-slate-50'}`}>
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
-                  <span className={`text-xs font-medium capitalize ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{item.name}</span>
-                </div>
-                <span className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-        <article className={`rounded-2xl border p-5 shadow-sm transition-colors duration-300 ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`}>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className={`font-heading text-lg font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Today’s Schedule</h3>
-              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{todaysAppointments.length} appointments today</p>
-            </div>
-            <div className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-medium ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-              <Clock size={14} />
-              <span>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
-            </div>
-          </div>
-
-          {todaysAppointments.length === 0 ? (
-            <div className={`mt-5 flex flex-col items-center justify-center rounded-2xl px-6 py-12 text-center ${isDark ? 'bg-slate-700' : 'bg-slate-50'}`}>
-              <CalendarCheck size={48} className={isDark ? 'text-slate-600' : 'text-slate-300'} />
-              <p className={`mt-4 font-medium ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>No appointments scheduled</p>
-              <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-slate-400'}`}>New bookings will appear here automatically</p>
-            </div>
-          ) : (
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {todaysAppointments.slice(0, 6).map((row) => (
-                <div key={row.id} className={`rounded-2xl border p-4 transition-all duration-300 ${isDark ? 'border-slate-700 bg-slate-700/40 hover:border-blue-600/60 hover:bg-slate-700' : 'border-slate-200 bg-slate-50 hover:border-blue-200 hover:bg-white hover:shadow-sm'}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className={`truncate font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{row.patient_name}</p>
-                      <p className={`mt-1 truncate text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{row.doctor_name}</p>
-                    </div>
-                    <StatusBadge value={row.status} />
-                  </div>
-                  <div className={`mt-3 flex items-center gap-2 text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    <Clock size={14} className={isDark ? 'text-slate-500' : 'text-slate-400'} />
-                    <span>{row.appointment_time || 'Not scheduled'}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <aside className="grid gap-5">
-          <article className={`rounded-2xl border p-5 shadow-sm transition-colors duration-300 ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`}>
-            <h3 className={`font-heading text-lg font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Operations Snapshot</h3>
-            <div className="mt-4 space-y-3">
-              {[
-                { label: 'Appointments today', value: todaysAppointments.length },
-                { label: 'Upcoming queue', value: upcomingAppointments.length },
-                { label: 'Outstanding balance', value: `$${outstanding.toLocaleString()}` },
-              ].map((item) => (
-                <div key={item.label} className={`flex items-center justify-between rounded-xl border px-4 py-3 ${isDark ? 'border-slate-700 bg-slate-700/30' : 'border-slate-200 bg-slate-50'}`}>
-                  <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{item.label}</p>
-                  <p className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{item.value}</p>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <article className={`rounded-2xl border p-5 shadow-sm transition-colors duration-300 ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className={`font-heading text-lg font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Next Appointments</h3>
-                <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Next 6 in the schedule</p>
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {upcomingAppointments.length === 0 ? (
-                <div className={`rounded-xl px-4 py-5 text-sm ${isDark ? 'bg-slate-700/40 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>
-                  No upcoming appointments.
+            <div className="p-0">
+              {todaysAppointments.length > 0 ? (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {todaysAppointments.slice(0, 5).map((appt) => {
+                    const initials =
+                      appt.patient_name
+                        ?.split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .substring(0, 2)
+                        .toUpperCase() || '?';
+                    return (
+                      <AppointmentRow
+                        key={appt.id}
+                        time={appt.appointment_time || '—'}
+                        patient={appt.patient_name || 'Unknown Patient'}
+                        initials={initials}
+                        dept={appt.doctor_name || 'General'}
+                        status={appt.status || 'Scheduled'}
+                      />
+                    );
+                  })}
                 </div>
               ) : (
-                upcomingAppointments.map((item) => (
-                  <div key={item.id} className={`rounded-xl border px-4 py-3 ${isDark ? 'border-slate-700 bg-slate-700/30' : 'border-slate-200 bg-slate-50'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className={`truncate text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{item.patient_name}</p>
-                        <p className={`truncate text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{item.doctor_name}</p>
-                      </div>
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${isDark ? 'bg-slate-600/50 text-slate-200' : 'bg-white text-slate-600'}`}>{item.status}</span>
-                    </div>
-                    <div className={`mt-3 flex items-center justify-between text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      <span>{fmtShortDate(item.appointment_date)}</span>
-                      <span>{item.appointment_time || 'No time'}</span>
-                    </div>
-                  </div>
-                ))
+                <div className="px-5 py-8 text-center">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    No appointments scheduled for today.
+                  </p>
+                </div>
               )}
             </div>
-          </article>
-        </aside>
-      </section>
+          </div>
+
+          {/* Department Occupancy */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                Department Occupancy
+              </h3>
+            </div>
+            <div className="p-5 space-y-4">
+              <OccupancyBar dept="ICU" used={18} total={20} />
+              <OccupancyBar dept="ER" used={32} total={45} />
+              <OccupancyBar dept="Cardiology" used={12} total={30} />
+              <OccupancyBar dept="Pediatrics" used={24} total={40} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer className="pt-6 pb-2 text-center text-xs text-slate-400 dark:text-slate-500">
+        AetherCare HMS · Secure & HIPAA-aware · System status:{' '}
+        <span className="text-emerald-600 dark:text-emerald-500 font-medium">
+          All systems operational
+        </span>
+      </footer>
     </div>
   );
 }

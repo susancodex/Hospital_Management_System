@@ -1,7 +1,6 @@
 import { Bell, ChevronDown, LogOut, Menu, Search, User } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { patientsAPI } from '../api/services.js';
 import { useAuth } from '../hooks/useAuth.js';
@@ -15,9 +14,12 @@ const pageTitles = {
   '/patients': 'Patients',
   '/appointments': 'Appointments',
   '/medical-records': 'Medical Records',
+  '/medical-reports': 'Medical Reports',
   '/billing': 'Billing',
-  '/profile': 'My Profile',
+  '/profile': 'Profile',
 };
+
+const roleLabels = { admin: 'Administrator', doctor: 'Doctor', reception: 'Receptionist' };
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -26,175 +28,186 @@ export default function Navbar() {
   const { openMobileSidebar, search, setSearch } = useUIStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const dropdownRef = useRef(null);
   const searchRef = useRef(null);
-  const debounced = useDebounce(search, 350);
+  const debounced = useDebounce(search, 300);
 
-  const pageTitle = useMemo(() => pageTitles[location.pathname] || 'Hospital Management', [location.pathname]);
+  const pageTitle = useMemo(() => pageTitles[location.pathname] || 'AetherCare', [location.pathname]);
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setDropdownOpen(false);
-      }
-      if (searchRef.current && !searchRef.current.contains(e.target)) {
-        setSearchResults([]);
-      }
+    const onClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setDropdownOpen(false);
+      if (searchRef.current && !searchRef.current.contains(e.target)) setSearchResults([]);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
   useEffect(() => {
-    const fetchSearch = async () => {
-      if (!debounced.trim()) {
-        setSearchResults([]);
-        return;
-      }
+    let cancelled = false;
+    const run = async () => {
+      if (!debounced.trim()) { setSearchResults([]); return; }
       try {
-        const response = await patientsAPI.list({ search: debounced });
-        setSearchResults(response.items.slice(0, 5));
-      } catch {
-        setSearchResults([]);
-      }
+        const r = await patientsAPI.list({ search: debounced });
+        if (!cancelled) setSearchResults((r.items || []).slice(0, 5));
+      } catch { if (!cancelled) setSearchResults([]); }
     };
-    fetchSearch();
+    run();
+    return () => { cancelled = true; };
   }, [debounced]);
 
   const handleLogout = () => {
     logout();
-    toast.success('Logged out successfully');
+    toast.success('Signed out');
     navigate('/login');
   };
 
-  const roleLabel = {
-    admin: 'Administrator',
-    doctor: 'Doctor',
-    reception: 'Receptionist',
-  };
-
-  const roleColors = { admin: 'from-blue-600 to-indigo-600', doctor: 'from-emerald-600 to-teal-600', reception: 'from-amber-600 to-orange-600' };
-  const roleLabels = { admin: 'Administrator', doctor: 'Doctor', reception: 'Receptionist' };
+  const initials = (user?.username || 'U').slice(0, 2).toUpperCase();
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-sm dark:shadow-lg transition-colors duration-300">
-      <div className="mx-auto flex max-w-[1600px] items-center gap-2 sm:gap-3 px-3 py-2.5 sm:px-4 sm:py-3 md:px-6 lg:px-8">
-        <button onClick={openMobileSidebar} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-700 lg:hidden">
+    <header className="sticky top-0 z-40 h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+      <div className="h-full flex items-center gap-3 px-4 sm:px-6 lg:px-8">
+        {/* Mobile menu */}
+        <button
+          onClick={openMobileSidebar}
+          className="inline-flex items-center justify-center h-9 w-9 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
+          aria-label="Open menu"
+        >
           <Menu size={18} />
         </button>
 
-        <div className="min-w-0 flex-shrink">
-          <p className="hidden sm:block text-[10px] uppercase tracking-[0.2em] text-blue-500">AetherCare</p>
-          <h1 className="font-heading text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">{pageTitle}</h1>
-        </div>
+        {/* Page title (mobile) / Search (desktop) */}
+        <h1 className="lg:hidden text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
+          {pageTitle}
+        </h1>
 
-        <div className="ml-2 hidden xl:flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 dark:from-slate-800 to-slate-800 dark:to-slate-900 px-4 py-2 text-white">
-          <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3 }}>
-            <span className="text-xs font-medium text-slate-400">Welcome back,</span>
-            <div className="flex items-center gap-2">
-              <span className="font-heading font-bold">{user?.username}</span>
-              <span className={`rounded-full bg-gradient-to-r px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${roleColors[user?.role] || 'from-slate-500 to-slate-600'}`}>
-                {roleLabels[user?.role] || user?.role}
-              </span>
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="relative ml-auto hidden md:block max-w-xl flex-1" ref={searchRef}>
-          <form
-            className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 shadow-sm transition-colors"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (search.trim()) navigate(`/patients?q=${encodeURIComponent(search.trim())}`);
+        <div className="hidden lg:block relative w-96 max-w-md" ref={searchRef}>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && search.trim()) {
+                navigate(`/patients?q=${encodeURIComponent(search.trim())}`);
+                setSearchResults([]);
+              }
             }}
-          >
-            <Search size={16} className="text-slate-400 dark:text-slate-500" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Global search patients"
-              className="w-full border-none bg-transparent text-sm text-slate-700 dark:text-slate-300 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            />
-          </form>
+            placeholder="Search patients, MRN, doctors…"
+            className="h-9 w-full pl-9 pr-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+          />
           {searchResults.length > 0 && (
-            <div className="absolute left-0 right-0 top-[52px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-lg">
-              {searchResults.map((patient) => (
+            <div className="absolute left-0 right-0 top-11 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden">
+              {searchResults.map((p) => (
                 <button
-                  key={patient.id}
+                  key={p.id}
                   type="button"
                   onClick={() => {
-                    navigate(`/patients?q=${encodeURIComponent(patient.full_name || `${patient.first_name} ${patient.last_name}`)}`);
+                    navigate(`/patients?q=${encodeURIComponent(p.full_name || `${p.first_name} ${p.last_name}`)}`);
                     setSearchResults([]);
                   }}
-                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  <span className="text-slate-700 dark:text-slate-300">{patient.full_name || `${patient.first_name} ${patient.last_name}`}</span>
-                  <span className="text-xs text-slate-400 dark:text-slate-500">{patient.phone}</span>
+                  <span className="text-slate-700 dark:text-slate-200">{p.full_name || `${p.first_name} ${p.last_name}`}</span>
+                  <span className="text-xs text-slate-400 font-mono">{p.phone || ''}</span>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        <div className="ml-auto md:ml-0 flex items-center gap-1.5 sm:gap-2 md:gap-3">
+        <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <button
             type="button"
-            onClick={() => navigate('/patients')}
-            className="grid h-10 w-10 shrink-0 md:hidden place-items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-700"
-            title="Search"
+            onClick={() => setMobileSearchOpen((v) => !v)}
+            className="lg:hidden inline-flex items-center justify-center h-9 w-9 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Search"
           >
             <Search size={18} />
           </button>
 
           <ThemeToggle />
 
-          <button className="relative hidden sm:grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-700" title="Notifications">
+          <button
+            type="button"
+            className="relative hidden sm:inline-flex items-center justify-center h-9 w-9 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            title="Notifications"
+          >
             <Bell size={18} />
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-600" />
+            <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-rose-500" />
           </button>
+
+          <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
 
           <div className="relative" ref={dropdownRef}>
             <button
-              className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 sm:px-3 py-1.5 sm:py-2 transition hover:bg-slate-100 dark:hover:bg-slate-700"
               onClick={() => setDropdownOpen((v) => !v)}
+              className="flex items-center gap-2 pl-1 pr-2 h-9 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
             >
-              <div className="grid h-8 w-8 place-items-center rounded-lg bg-blue-100 dark:bg-blue-900 text-sm font-semibold text-blue-700 dark:text-blue-300">
-                {user?.profile_picture ? (
-                  <img src={user.profile_picture} alt="profile" className="h-8 w-8 rounded-lg object-cover" />
-                ) : (
-                  user?.username?.charAt(0).toUpperCase()
-                )}
+              <div className="h-7 w-7 rounded-full bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 grid place-items-center text-xs font-semibold border border-slate-200 dark:border-slate-700 overflow-hidden">
+                {user?.profile_picture
+                  ? <img src={user.profile_picture} alt="" className="h-7 w-7 object-cover" />
+                  : initials}
               </div>
-              <div className="hidden text-left md:block">
-                <div className="text-sm font-medium text-slate-800 dark:text-slate-200">{user?.username}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">{roleLabel[user?.role] || user?.role}</div>
+              <div className="hidden md:block text-left leading-tight">
+                <p className="text-xs font-medium text-slate-900 dark:text-slate-100">{user?.username || 'User'}</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">{roleLabels[user?.role] || user?.role}</p>
               </div>
-              <ChevronDown size={14} className="text-slate-500 dark:text-slate-400" />
+              <ChevronDown size={14} className="text-slate-400" />
             </button>
 
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-lg">
-                <div className="rounded-lg bg-slate-50 dark:bg-slate-700 p-3">
-                  <div className="text-sm font-medium text-slate-800 dark:text-slate-200">{user?.username}</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">{roleLabel[user?.role] || user?.role}</div>
+              <div className="absolute right-0 mt-2 w-56 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1 animate-rise">
+                <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800">
+                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{user?.username}</p>
+                  <p className="text-xs text-slate-500">{roleLabels[user?.role] || user?.role}</p>
                 </div>
-
-                <button className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors" onClick={() => { setDropdownOpen(false); navigate('/profile'); }}>
-                  <User size={15} />
-                  Profile
+                <button
+                  onClick={() => { setDropdownOpen(false); navigate('/profile'); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md"
+                >
+                  <User size={14} className="text-slate-400" /> Profile
                 </button>
-                <Link to="/" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                <Link
+                  to="/"
+                  onClick={() => setDropdownOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md"
+                >
                   Home
                 </Link>
-                <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" onClick={handleLogout}>
-                  <LogOut size={15} />
-                  Sign out
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-md"
+                >
+                  <LogOut size={14} /> Sign out
                 </button>
               </div>
             )}
           </div>
         </div>
       </div>
-    </nav>
+
+      {/* Mobile search drawer */}
+      {mobileSearchOpen && (
+        <div className="lg:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && search.trim()) {
+                  navigate(`/patients?q=${encodeURIComponent(search.trim())}`);
+                  setMobileSearchOpen(false);
+                }
+              }}
+              placeholder="Search patients…"
+              className="h-10 w-full pl-9 pr-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+            />
+          </div>
+        </div>
+      )}
+    </header>
   );
 }

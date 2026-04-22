@@ -1,13 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Search, Stethoscope, Phone, Mail, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Search, Phone, Mail, Eye, Edit, Trash2, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { useTheme } from '../context/ThemeContext.jsx';
+
 import { appointmentsAPI, doctorsAPI } from '../api/services.js';
 import AppModal from '../components/common/AppModal.jsx';
+import { FormField, ConfirmDialog } from '../components/common/UIStates.jsx';
 import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx';
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatusBadge from '../components/common/StatusBadge.jsx';
@@ -15,31 +15,31 @@ import { useAuth } from '../hooks/useAuth.js';
 import { hasPermission } from '../lib/permissions.js';
 
 const schema = z.object({
-  first_name: z.string().min(2),
-  last_name: z.string().min(2),
-  email: z.string().email(),
-  phone: z.string().min(6),
-  specialization: z.string().min(2),
+  first_name: z.string().min(2, "First name is required"),
+  last_name: z.string().min(2, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().min(6, "Phone number is required"),
+  specialization: z.string().min(2, "Specialization is required"),
   license_number: z.string().optional(),
   is_available: z.boolean(),
 });
 
-const fadeIn = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } };
-const stagger = { animate: { transition: { staggerChildren: 0.08 } } };
-
 export default function Doctors() {
-  const { isDark } = useTheme();
   const { user } = useAuth();
   const canManageDoctors = hasPermission(user?.role, 'doctors.manage');
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [query, setQuery] = useState('');
+  
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  
   const [viewDoctor, setViewDoctor] = useState(null);
   const [viewAppointments, setViewAppointments] = useState([]);
+  
+  const [deleteId, setDeleteId] = useState(null);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting, touchedFields } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: { is_available: true },
   });
@@ -48,7 +48,7 @@ export default function Doctors() {
     setLoading(true);
     try {
       const response = await doctorsAPI.list({ search });
-      setRows(response.items);
+      setRows(response.items || []);
     } catch {
       toast.error('Failed to load doctors');
     } finally {
@@ -66,166 +66,343 @@ export default function Doctors() {
 
   const openEdit = (row) => {
     setEditing(row);
-    reset({ first_name: row.first_name, last_name: row.last_name, email: row.email, phone: row.phone, specialization: row.specialization, license_number: row.license_number || '', is_available: !!row.is_available });
+    reset({ 
+      first_name: row.first_name, 
+      last_name: row.last_name, 
+      email: row.email, 
+      phone: row.phone, 
+      specialization: row.specialization, 
+      license_number: row.license_number || '', 
+      is_available: !!row.is_available 
+    });
     setOpen(true);
   };
 
   const onSubmit = async (values) => {
     try {
-      if (editing) { await doctorsAPI.update(editing.id, values); toast.success('Doctor updated'); }
-      else { await doctorsAPI.create(values); toast.success('Doctor created'); }
+      if (editing) { 
+        await doctorsAPI.update(editing.id, values); 
+        toast.success('Doctor updated successfully'); 
+      } else { 
+        await doctorsAPI.create(values); 
+        toast.success('Doctor created successfully'); 
+      }
       setOpen(false);
       await load();
-    } catch { toast.error('Unable to save doctor'); }
+    } catch { 
+      toast.error(editing ? 'Unable to update doctor' : 'Unable to create doctor'); 
+    }
   };
 
-  const onDelete = async (id) => {
-    try { await doctorsAPI.delete(id); toast.success('Doctor deleted'); await load(); }
-    catch { toast.error('Unable to delete doctor'); }
+  const confirmDelete = (id) => setDeleteId(id);
+  const onDelete = async () => {
+    if (!deleteId) return;
+    try { 
+      await doctorsAPI.delete(deleteId); 
+      toast.success('Doctor deleted successfully'); 
+      await load(); 
+    } catch { 
+      toast.error('Unable to delete doctor'); 
+    } finally {
+      setDeleteId(null);
+    }
   };
 
   const viewDoctorDetails = async (doctor) => {
     setViewDoctor(doctor);
-    try { const response = await appointmentsAPI.list({ doctor: doctor.id }); setViewAppointments(response.items.filter(a => a.doctor === doctor.id)); }
-    catch { setViewAppointments([]); }
+    try { 
+      const response = await appointmentsAPI.list({ doctor: doctor.id }); 
+      setViewAppointments((response.items || []).filter(a => a.doctor === doctor.id)); 
+    } catch { 
+      setViewAppointments([]); 
+    }
   };
 
   return (
-    <motion.div className="space-y-6" initial="initial" animate="animate" variants={stagger}>
-      <PageHeader title="Doctors" subtitle="Manage doctor directory and availability" icon={Stethoscope} actions={canManageDoctors && (
-        <motion.button onClick={openCreate} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/30" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Plus size={16} /> New Doctor
-        </motion.button>
-      )} />
+    <div className="space-y-6 max-w-[1400px] mx-auto w-full">
+      <PageHeader 
+        title="Doctors" 
+        subtitle={`Showing ${rows.length} active practitioners`}
+        actions={
+          <>
+            <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition-colors">
+              <Download size={16} /> Export
+            </button>
+            {canManageDoctors && (
+              <button 
+                onClick={openCreate} 
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+              >
+                <Plus size={16} /> Add doctor
+              </button>
+            )}
+          </>
+        } 
+      />
 
-      <motion.div className={`rounded-2xl border p-4 shadow-sm transition-colors ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`} variants={fadeIn}>
-        <form className="flex flex-wrap items-center gap-3" onSubmit={(e) => { e.preventDefault(); load(query); }}>
-          <motion.div className={`flex h-12 flex-1 min-w-[200px] items-center gap-2 rounded-xl border px-4 transition-colors ${isDark ? 'border-slate-600 bg-slate-700' : 'border-slate-200 bg-slate-50'}`} whileFocus={{ scale: 1.01 }}>
-            <Search size={18} className={isDark ? 'text-slate-500' : 'text-slate-400'} />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search doctors..." className={`w-full border-none bg-transparent text-sm outline-none ${isDark ? 'text-slate-100 placeholder:text-slate-500' : 'text-slate-900 placeholder:text-slate-400'}`} />
-          </motion.div>
-          <motion.button type="submit" className={`rounded-xl border px-5 py-2.5 text-sm font-medium transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 hover:bg-slate-600' : 'border-slate-300 bg-slate-900 text-white hover:bg-slate-800'}`} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-4">
+        <form 
+          className="flex flex-col sm:flex-row items-center gap-3" 
+          onSubmit={(e) => { e.preventDefault(); load(query); }}
+        >
+          <div className="relative w-full sm:max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              value={query} 
+              onChange={(e) => setQuery(e.target.value)} 
+              placeholder="Search doctors, specialty..." 
+              className="h-10 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-3 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600" 
+            />
+          </div>
+          <button 
+            type="submit" 
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-medium transition-colors"
+          >
             Search
-          </motion.button>
+          </button>
         </form>
-      </motion.div>
+      </div>
 
-      {loading ? <TableSkeleton isDark={isDark} /> : rows.length === 0 ? <EmptyState title="No doctors found" description="Add doctors to get started" isDark={isDark} /> : (
-        <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" variants={stagger}>
-          <AnimatePresence>
-            {rows.map((row, idx) => (
-              <motion.article key={row.id} className={`group relative overflow-hidden rounded-2xl border p-5 shadow-sm transition-all ${isDark ? 'border-slate-700 bg-slate-800 hover:bg-slate-700/50 hover:shadow-slate-900/50' : 'border-slate-200/80 bg-white hover:shadow-lg'}`} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ delay: idx * 0.05 }} whileHover={{ y: -4 }}>
-                <motion.div className={`absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-0 group-hover:opacity-100 ${isDark ? 'bg-gradient-to-br from-slate-700 to-slate-600' : 'bg-gradient-to-br from-blue-50 to-blue-100'}`} animate={{ opacity: [0, 0.5, 0] }} transition={{ duration: 2, repeat: Infinity }} />
-                <div className="relative">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <motion.div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 text-xl font-bold text-white shadow-lg" whileHover={{ rotate: 5 }}>
-                        {row.first_name?.charAt(0)}{row.last_name?.charAt(0)}
-                      </motion.div>
-                      <div>
-                        <p className={`font-heading text-lg font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{row.full_name}</p>
-                          <p className={`text-sm ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>{row.specialization}</p>
+      {loading ? <TableSkeleton rows={8} /> : rows.length === 0 ? (
+        <EmptyState title="No doctors found" description="Add doctors to populate the directory." />
+      ) : (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50/60 dark:bg-slate-900/40">
+                <tr>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Doctor</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Contact</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Patients</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                  <th className="h-10 px-5 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide w-16"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs font-medium shrink-0">
+                          {row.first_name?.charAt(0)}{row.last_name?.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-900 dark:text-slate-100 group-hover:text-teal-700 dark:group-hover:text-teal-400 transition-colors">{row.full_name}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{row.specialization}</p>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div className={`mt-4 space-y-2 text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    <div className="flex items-center gap-2"><Phone size={14} className={isDark ? 'text-slate-500' : 'text-slate-400'} /><span>{row.phone}</span></div>
-                    <div className="flex items-center gap-2"><Mail size={14} className={isDark ? 'text-slate-500' : 'text-slate-400'} /><span className="truncate">{row.email}</span></div>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between">
-                    <StatusBadge value={row.is_available ? 'active' : 'inactive'} />
-                    <div className="flex items-center gap-2">
-                      {canManageDoctors ? (
-                        <motion.div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                          <motion.button onClick={() => viewDoctorDetails(row)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${isDark ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`} whileHover={{ scale: 1.1 }}>View</motion.button>
-                          <motion.button onClick={() => openEdit(row)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`} whileHover={{ scale: 1.1 }}>Edit</motion.button>
-                          <motion.button onClick={() => onDelete(row.id)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${isDark ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50' : 'bg-red-50 text-red-600 hover:bg-red-100'}`} whileHover={{ scale: 1.1 }}>Delete</motion.button>
-                        </motion.div>
-                      ) : (
-                        <motion.button onClick={() => viewDoctorDetails(row)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${isDark ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`} whileHover={{ scale: 1.1 }}>View Profile</motion.button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </motion.article>
-            ))}
-          </AnimatePresence>
-        </motion.div>
+                    </td>
+                    <td className="px-5 py-3 text-slate-600 dark:text-slate-300">
+                      <div className="text-sm truncate max-w-[180px]">{row.phone || '-'}</div>
+                      <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[180px]">{row.email || '-'}</div>
+                    </td>
+                    <td className="px-5 py-3 text-slate-600 dark:text-slate-300">
+                      <div className="text-sm">-</div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusBadge value={row.is_available ? 'active' : 'inactive'} />
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => viewDoctorDetails(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-100" title="View details">
+                          <Eye size={16} />
+                        </button>
+                        {canManageDoctors && (
+                          <>
+                            <button onClick={() => openEdit(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-100" title="Edit doctor">
+                              <Edit size={16} />
+                            </button>
+                            <button onClick={() => confirmDelete(row.id)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 dark:hover:text-rose-400" title="Delete doctor">
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
-      <AppModal open={open && canManageDoctors} onClose={() => setOpen(false)} title={editing ? 'Update Doctor' : 'Add New Doctor'}>
-        <motion.form onSubmit={handleSubmit(onSubmit)} className="grid gap-5" initial="initial" animate="animate">
+      {/* Create/Edit Modal */}
+      <AppModal 
+        open={open && canManageDoctors} 
+        onClose={() => setOpen(false)} 
+        title={editing ? 'Edit Doctor' : 'Add New Doctor'}
+        size="lg"
+        footer={
+          <>
+            <button 
+              type="button" 
+              onClick={() => setOpen(false)}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleSubmit(onSubmit)}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors disabled:opacity-50"
+            >
+              {editing ? 'Save changes' : 'Add doctor'}
+            </button>
+          </>
+        }
+      >
+        <div className="grid gap-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <motion.div variants={fadeIn}>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>First Name *</label>
-              <input {...register('first_name')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-900/30' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100'}`} />
-            </motion.div>
-            <motion.div variants={fadeIn}>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Last Name *</label>
-              <input {...register('last_name')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-900/30' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100'}`} />
-            </motion.div>
+            <FormField 
+              label="First Name" 
+              required 
+              {...register('first_name')} 
+              error={errors.first_name?.message} 
+              touched={touchedFields.first_name}
+            />
+            <FormField 
+              label="Last Name" 
+              required 
+              {...register('last_name')} 
+              error={errors.last_name?.message} 
+              touched={touchedFields.last_name}
+            />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Email *</label>
-              <input type="email" {...register('email')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-900/30' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100'}`} />
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Phone *</label>
-              <input {...register('phone')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-900/30' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100'}`} />
-            </div>
+            <FormField 
+              label="Email" 
+              type="email" 
+              required 
+              {...register('email')} 
+              error={errors.email?.message} 
+              touched={touchedFields.email}
+            />
+            <FormField 
+              label="Phone" 
+              required 
+              {...register('phone')} 
+              error={errors.phone?.message} 
+              touched={touchedFields.phone}
+            />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Specialization *</label>
-              <input {...register('specialization')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-900/30' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100'}`} />
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>License Number</label>
-              <input {...register('license_number')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-900/30' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100'}`} />
-            </div>
+            <FormField 
+              label="Specialization" 
+              required 
+              {...register('specialization')} 
+              error={errors.specialization?.message} 
+              touched={touchedFields.specialization}
+            />
+            <FormField 
+              label="License Number" 
+              {...register('license_number')} 
+              error={errors.license_number?.message} 
+              touched={touchedFields.license_number}
+            />
           </div>
           <div>
-            <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Availability</label>
-            <select {...register('is_available')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-900/30' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100'}`}>
-              <option value={true}>Available</option>
-              <option value={false}>Not available</option>
-            </select>
+            <FormField 
+              label="Availability" 
+              type="select" 
+              {...register('is_available')} 
+              options={[
+                { value: true, label: 'Available' },
+                { value: false, label: 'Not available' },
+              ]}
+              onChange={(e) => setValue('is_available', e.target.value === 'true')}
+            />
           </div>
-          <motion.button disabled={isSubmitting} className="mt-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg" whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} disabled={isSubmitting}>
-            {editing ? 'Update Doctor' : 'Create Doctor'}
-          </motion.button>
-        </motion.form>
+        </div>
       </AppModal>
 
-      <AppModal open={!!viewDoctor} onClose={() => setViewDoctor(null)} title={`Dr. ${viewDoctor?.full_name?.replace('Dr. ', '')}`} size="lg">
-        <motion.div className="space-y-6" initial="initial" animate="animate" variants={stagger}>
-          <motion.div className="flex items-start gap-5" variants={fadeIn}>
-            <motion.div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 text-2xl font-bold text-white shadow-lg" whileHover={{ rotate: 5 }}>
+      {/* View Details Modal */}
+      <AppModal 
+        open={!!viewDoctor} 
+        onClose={() => setViewDoctor(null)} 
+        title="Doctor Profile" 
+        size="lg"
+        footer={
+          <button 
+            onClick={() => setViewDoctor(null)}
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+          >
+            Close
+          </button>
+        }
+      >
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl font-medium text-slate-600 dark:text-slate-300 shrink-0">
               {viewDoctor?.first_name?.charAt(0)}{viewDoctor?.last_name?.charAt(0)}
-            </motion.div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><p className="text-xs text-slate-400">Specialization</p><p className="font-semibold">{viewDoctor?.specialization}</p></div>
-              <div><p className="text-xs text-slate-400">Status</p><StatusBadge value={viewDoctor?.is_available ? 'active' : 'inactive'} /></div>
-              <div><p className="text-xs text-slate-400">Phone</p><p>{viewDoctor?.phone}</p></div>
-              <div><p className="text-xs text-slate-400">Email</p><p>{viewDoctor?.email}</p></div>
             </div>
-          </motion.div>
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{viewDoctor?.full_name}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-sm text-slate-500 dark:text-slate-400">{viewDoctor?.specialization}</p>
+                <span className="text-slate-300 dark:text-slate-600">•</span>
+                <StatusBadge value={viewDoctor?.is_available ? 'active' : 'inactive'} />
+              </div>
+            </div>
+          </div>
+          
+          <div className="grid sm:grid-cols-2 gap-4 rounded-xl border border-slate-100 dark:border-slate-800 p-5 bg-slate-50/50 dark:bg-slate-900/40">
+            <div>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Contact Info</p>
+              <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                <div className="flex items-start gap-2">
+                  <Phone size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                  <span>{viewDoctor?.phone || 'N/A'}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Mail size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                  <span>{viewDoctor?.email || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Professional Details</p>
+              <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-500">License Number</span>
+                  <span className="font-mono text-xs">{viewDoctor?.license_number || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <div>
-            <p className="mb-3 text-sm font-semibold">Appointments ({viewAppointments.length})</p>
-            {viewAppointments.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No appointments</p> : (
-              <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-slate-200 p-2">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Today's Schedule</h3>
+            {viewAppointments.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                No appointments scheduled.
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
                 {viewAppointments.slice(0, 5).map((apt) => (
-                  <motion.div key={apt.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3" whileHover={{ scale: 1.01 }}>
-                    <div><p className="font-medium">{apt.patient_name}</p><p className="text-xs text-slate-500">{apt.appointment_date}</p></div>
+                  <div key={apt.id} className="p-4 bg-white dark:bg-slate-900 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{apt.patient_name || 'Unknown Patient'}</p>
+                      <p className="text-xs text-slate-500 mt-1">{new Date(apt.appointment_date).toLocaleDateString()}</p>
+                    </div>
                     <StatusBadge value={apt.status} />
-                  </motion.div>
+                  </div>
                 ))}
               </div>
             )}
           </div>
-        </motion.div>
+        </div>
       </AppModal>
-    </motion.div>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog 
+        isOpen={!!deleteId}
+        title="Delete Doctor"
+        message="Are you sure you want to delete this doctor's profile? This action cannot be undone."
+        onConfirm={onDelete}
+        onCancel={() => setDeleteId(null)}
+        isDangerous={true}
+      />
+    </div>
   );
 }

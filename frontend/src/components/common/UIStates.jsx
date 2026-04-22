@@ -1,300 +1,150 @@
-import { AlertCircle, Search, Plus } from 'lucide-react';
-import { useTheme } from '../../context/ThemeContext.jsx';
+import { AlertTriangle, Search } from 'lucide-react';
 
-/**
- * Component for displaying empty state
- */
-export const EmptyState = ({
-  icon: Icon = Search,
-  title = 'No data found',
-  description = 'Try adjusting your search or filters',
-  action = null,
-  isDark = false,
-}) => {
-  return (
-    <div className={`flex flex-col items-center justify-center rounded-2xl py-12 ${
-      isDark ? 'bg-slate-800' : 'bg-slate-50'
-    }`}>
-      <Icon size={48} className={isDark ? 'text-slate-600' : 'text-slate-300'} />
-      <p className={`mt-4 font-medium ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>{title}</p>
-      <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-slate-400'}`}>{description}</p>
-      {action && <div className="mt-4">{action}</div>}
+export const EmptyState = ({ icon: Icon = Search, title = 'No data yet', description = 'Try adjusting your search or filters.', action = null }) => (
+  <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+    <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">
+      <Icon size={22} />
     </div>
-  );
-};
+    <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</p>
+    <p className="mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">{description}</p>
+    {action && <div className="mt-5">{action}</div>}
+  </div>
+);
 
-/**
- * Component for displaying loading skeleton
- */
-export const SkeletonLoader = ({ count = 5, isDark = false }) => {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: count }).map((_, i) => (
-        <div
-          key={i}
-          className={`h-12 rounded-lg ${isDark ? 'bg-slate-700' : 'bg-slate-200'} animate-pulse`}
-        />
-      ))}
-    </div>
-  );
-};
+export const SkeletonLoader = ({ count = 5 }) => (
+  <div className="space-y-2">
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className="h-11 rounded-md bg-slate-100 dark:bg-slate-800 animate-pulse" />
+    ))}
+  </div>
+);
 
-/**
- * Component for displaying error state
- */
-export const ErrorState = ({
-  error,
-  onRetry,
-  isDark = false,
-}) => {
-  return (
-    <div className={`flex flex-col items-center justify-center rounded-2xl border-2 py-8 px-4 ${
-      isDark
-        ? 'border-red-900 bg-red-900/20'
-        : 'border-red-100 bg-red-50'
-    }`}>
-      <AlertCircle size={48} className={isDark ? 'text-red-400' : 'text-red-600'} />
-      <p className={`mt-4 font-medium ${isDark ? 'text-red-300' : 'text-red-900'}`}>Error Loading Data</p>
-      <p className={`mt-2 text-center text-sm ${isDark ? 'text-red-400' : 'text-red-700'}`}>{error}</p>
-      {onRetry && (
-        <button
-          onClick={onRetry}
-          className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition"
-        >
-          Try Again
-        </button>
-      )}
-    </div>
-  );
-};
+export const ErrorState = ({ error, onRetry }) => (
+  <div className="flex flex-col items-center justify-center rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 px-6 py-10 text-center">
+    <AlertTriangle size={28} className="text-rose-600" />
+    <p className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">Couldn't load data</p>
+    <p className="mt-1 max-w-sm text-xs text-slate-500 dark:text-slate-400">{error}</p>
+    {onRetry && (
+      <button
+        onClick={onRetry}
+        className="mt-4 inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium"
+      >
+        Try again
+      </button>
+    )}
+  </div>
+);
 
-/**
- * Component for displaying loading spinner
- */
-export const LoadingSpinner = ({ fullPage = false, isDark = false }) => {
+export const LoadingSpinner = ({ fullPage = false, label = 'Loading…' }) => {
   const spinner = (
-    <div className="flex flex-col items-center justify-center gap-3">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-      <p className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>Loading...</p>
+    <div className="flex flex-col items-center justify-center gap-2">
+      <div className="h-7 w-7 animate-spin rounded-full border-2 border-teal-700 border-t-transparent" />
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
     </div>
   );
-
-  if (fullPage) {
-    return (
-      <div className={`fixed inset-0 grid place-items-center ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
-        {spinner}
-      </div>
-    );
-  }
-
+  if (fullPage) return <div className="fixed inset-0 grid place-items-center bg-slate-50 dark:bg-slate-950">{spinner}</div>;
   return spinner;
 };
 
-/**
- * Component for displaying table with empty state
- */
-export const DataTable = ({
-  columns,
-  data,
-  loading,
-  error,
-  onRetry,
-  isDark = false,
+export const FormError = ({ error }) => {
+  if (!error) return null;
+  return <p className="mt-1 text-xs text-rose-600 inline-flex items-center gap-1"><AlertTriangle size={12}/> {error}</p>;
+};
+
+export const FormField = ({
+  label, name, type = 'text', value, error, touched, onChange, onBlur, placeholder,
+  required = false, options = null, rows = null, autoComplete,
 }) => {
-  if (loading) {
-    return <SkeletonLoader count={5} isDark={isDark} />;
-  }
-
-  if (error) {
-    return <ErrorState error={error} onRetry={onRetry} isDark={isDark} />;
-  }
-
-  if (!data || data.length === 0) {
-    return <EmptyState isDark={isDark} />;
-  }
+  const baseClasses = `w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 transition-colors ${
+    error && touched ? 'border-rose-400 dark:border-rose-700 focus:ring-rose-500/20 focus:border-rose-500' : ''
+  }`;
+  const sizing = type === 'textarea' ? 'py-2.5' : 'h-10';
 
   return (
-    <div className={`overflow-x-auto rounded-xl border ${
-      isDark
-        ? 'border-slate-700 bg-slate-800'
-        : 'border-slate-200 bg-white'
-    }`}>
-      <table className="w-full text-sm">
-        <thead className={isDark ? 'bg-slate-700' : 'bg-slate-50'}>
-          <tr>
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                className={`px-6 py-3 text-left font-semibold ${
-                  isDark ? 'text-slate-300' : 'text-slate-900'
-                }`}
-              >
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row, idx) => (
-            <tr
-              key={idx}
-              className={`border-t ${
-                isDark
-                  ? 'border-slate-700 hover:bg-slate-700/50'
-                  : 'border-slate-200 hover:bg-slate-50'
-              } transition`}
-            >
-              {columns.map((col) => (
-                <td key={col.key} className={`px-6 py-4 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                  {col.render ? col.render(row[col.key], row) : row[col.key]}
-                </td>
-              ))}
-            </tr>
+    <div>
+      {label && (
+        <label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
+          {label}{required && <span className="text-rose-500 ml-0.5">*</span>}
+        </label>
+      )}
+      {type === 'textarea' ? (
+        <textarea
+          name={name} value={value || ''} onChange={onChange} onBlur={onBlur} placeholder={placeholder}
+          rows={rows || 3} className={`${baseClasses} ${sizing}`}
+        />
+      ) : type === 'select' ? (
+        <select name={name} value={value || ''} onChange={onChange} onBlur={onBlur} className={`${baseClasses} ${sizing}`}>
+          <option value="">Select {(label || name || '').toLowerCase()}…</option>
+          {options?.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
-        </tbody>
-      </table>
+        </select>
+      ) : (
+        <input
+          type={type} name={name} value={value ?? ''} onChange={onChange} onBlur={onBlur}
+          placeholder={placeholder} autoComplete={autoComplete}
+          className={`${baseClasses} ${sizing}`}
+        />
+      )}
+      {error && touched && <FormError error={error} />}
     </div>
   );
 };
 
-/**
- * Component for displaying confirmation dialog
- */
-export const ConfirmDialog = ({
-  isOpen,
-  title,
-  message,
-  onConfirm,
-  onCancel,
-  isDark = false,
-  isLoading = false,
-  isDangerous = false,
-}) => {
+export const ConfirmDialog = ({ isOpen, title, message, onConfirm, onCancel, isLoading = false, isDangerous = false }) => {
   if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className={`w-full max-w-sm rounded-2xl p-6 ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
-        <h3 className={`text-lg font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
-          {title}
-        </h3>
-        <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-          {message}
-        </p>
-        <div className="mt-6 flex gap-3">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
+        <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">{message}</p>
+        <div className="mt-5 flex gap-2 justify-end">
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
-              isDark
-                ? 'border border-slate-600 text-slate-300 hover:bg-slate-700'
-                : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
-            } disabled:opacity-50`}
-          >
-            Cancel
-          </button>
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium disabled:opacity-50"
+          >Cancel</button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium text-white transition ${
-              isDangerous
-                ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-blue-600 hover:bg-blue-700'
-            } disabled:opacity-50`}
-          >
-            {isLoading ? 'Loading...' : 'Confirm'}
-          </button>
+            className={`inline-flex items-center gap-2 h-9 px-4 rounded-md text-white text-sm font-medium disabled:opacity-50 ${isDangerous ? 'bg-rose-600 hover:bg-rose-700' : 'bg-teal-700 hover:bg-teal-800'}`}
+          >{isLoading ? 'Working…' : 'Confirm'}</button>
         </div>
       </div>
     </div>
   );
 };
 
-/**
- * Component for displaying form error
- */
-export const FormError = ({ error, isDark = false }) => {
-  if (!error) return null;
-
+export const DataTable = ({ columns, data, loading, error, onRetry }) => {
+  if (loading) return <SkeletonLoader count={6} />;
+  if (error) return <ErrorState error={error} onRetry={onRetry} />;
+  if (!data || data.length === 0) return <EmptyState />;
   return (
-    <div className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-      isDark
-        ? 'bg-red-900/30 text-red-400'
-        : 'bg-red-50 text-red-700'
-    }`}>
-      <AlertCircle size={14} />
-      {error}
-    </div>
-  );
-};
-
-/**
- * Component for displaying form field
- */
-export const FormField = ({
-  label,
-  name,
-  type = 'text',
-  value,
-  error,
-  touched,
-  onChange,
-  onBlur,
-  placeholder,
-  isDark = false,
-  required = false,
-  options = null, // For select fields
-  rows = null, // For textarea
-}) => {
-  const baseClasses = `w-full rounded-lg px-3 py-2.5 text-sm outline-none ring-blue-500/40 transition ${
-    isDark
-      ? 'border-slate-600 bg-slate-700 text-slate-100 placeholder:text-slate-500'
-      : 'border-slate-200 bg-white text-slate-900 placeholder:text-slate-400'
-  } ${error && touched ? (isDark ? 'border-red-600' : 'border-red-400') : 'border'}`;
-
-  return (
-    <div>
-      <label className={`mb-1 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-        {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
-      </label>
-      {type === 'textarea' ? (
-        <textarea
-          name={name}
-          value={value}
-          onChange={onChange}
-          onBlur={onBlur}
-          placeholder={placeholder}
-          rows={rows || 4}
-          className={baseClasses}
-        />
-      ) : type === 'select' ? (
-        <select
-          name={name}
-          value={value}
-          onChange={onChange}
-          onBlur={onBlur}
-          className={baseClasses}
-        >
-          <option value="">Select {label.toLowerCase()}</option>
-          {options?.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <input
-          type={type}
-          name={name}
-          value={value}
-          onChange={onChange}
-          onBlur={onBlur}
-          placeholder={placeholder}
-          className={baseClasses}
-        />
-      )}
-      {error && touched && <FormError error={error} isDark={isDark} />}
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50/60 dark:bg-slate-900/40">
+            <tr>
+              {columns.map((col) => (
+                <th key={col.key} className="h-10 px-5 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row, idx) => (
+              <tr key={idx} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                {columns.map((col) => (
+                  <td key={col.key} className="px-5 py-3 text-slate-700 dark:text-slate-300">
+                    {col.render ? col.render(row[col.key], row) : row[col.key]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

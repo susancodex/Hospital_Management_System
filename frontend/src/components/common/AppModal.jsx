@@ -1,50 +1,61 @@
 import { X } from 'lucide-react';
 import { useEffect } from 'react';
 
-export default function AppModal({ open, title, onClose, children, size = 'lg' }) {
+const sizes = {
+  sm: 'sm:max-w-md',
+  md: 'sm:max-w-lg',
+  lg: 'sm:max-w-2xl',
+  xl: 'sm:max-w-4xl',
+};
+
+export default function AppModal({ open, title, subtitle, onClose, children, size = 'lg', footer }) {
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    if (open) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
-  const sizes = {
-    sm: 'max-w-md',
-    md: 'max-w-lg',
-    lg: 'max-w-2xl',
-    xl: 'max-w-4xl',
-  };
-
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-3 sm:p-4 backdrop-blur-md animate-in fade-in duration-200"
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-0 sm:p-6"
       onClick={onClose}
     >
       <div
-        className={`relative w-full ${sizes[size]} max-h-[92vh] overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-2xl animate-in zoom-in-95 duration-200 dark:border-slate-700 dark:bg-slate-900`}
+        className={`w-full ${sizes[size]} bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-h-[92vh] flex flex-col animate-rise`}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-4 sm:px-6 dark:border-slate-800 dark:from-slate-900 dark:to-slate-900">
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-500/80 dark:text-blue-400/70">Form workflow</p>
-            <h3 className="mt-1 font-heading text-base font-semibold text-slate-900 sm:text-lg dark:text-slate-100">{title}</h3>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">{title}</h3>
+            {subtitle && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
           </div>
-          <button 
-            onClick={onClose} 
-            aria-label="Close modal"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-400 transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-500 dark:border-slate-700 dark:text-slate-300 dark:hover:border-red-700 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             <X size={16} />
           </button>
         </div>
-        <div className="max-h-[calc(92vh-72px)] overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
+        <div className="px-5 sm:px-6 py-5 overflow-y-auto flex-1">
           {children}
         </div>
+        {footer && (
+          <div className="px-5 sm:px-6 py-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex items-center justify-end gap-2">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

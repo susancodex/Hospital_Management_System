@@ -1,55 +1,68 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Search, Users, Phone, Mail, Calendar, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Search, Users, Phone, Mail, Calendar, MoreHorizontal, Eye, Edit, Trash2, Download } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { useTheme } from '../context/ThemeContext.jsx';
+
 import { appointmentsAPI, patientsAPI } from '../api/services.js';
 import AppModal from '../components/common/AppModal.jsx';
+import { FormField, ConfirmDialog } from '../components/common/UIStates.jsx';
 import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx';
 import PageHeader from '../components/common/PageHeader.jsx';
+import StatusBadge from '../components/common/StatusBadge.jsx';
 import { useAuth } from '../hooks/useAuth.js';
 import { hasPermission } from '../lib/permissions.js';
 
 const schema = z.object({
-  first_name: z.string().min(2),
-  last_name: z.string().min(2),
+  first_name: z.string().min(2, "First name is required"),
+  last_name: z.string().min(2, "Last name is required"),
   email: z.string().email().or(z.literal('')),
-  phone: z.string().min(6),
+  phone: z.string().min(6, "Phone number is required"),
   gender: z.enum(['M', 'F', 'O']),
   date_of_birth: z.string().optional(),
   address: z.string().optional(),
 });
 
 const PAGE_SIZE = 12;
-const fadeIn = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } };
-const stagger = { animate: { transition: { staggerChildren: 0.06 } } };
 
 export default function Patients() {
-  const { isDark } = useTheme();
   const { user } = useAuth();
   const canManagePatients = hasPermission(user?.role, 'patients.manage');
   const [searchParams] = useSearchParams();
   const queryFromUrl = searchParams.get('q') || '';
+  
   const [query, setQuery] = useState(queryFromUrl);
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
+  
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  
   const [viewPatient, setViewPatient] = useState(null);
   const [viewAppointments, setViewAppointments] = useState([]);
+  
+  const [deleteId, setDeleteId] = useState(null);
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({ resolver: zodResolver(schema), defaultValues: { gender: 'M' } });
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting, touchedFields } } = useForm({ 
+    resolver: zodResolver(schema), 
+    defaultValues: { gender: 'M' } 
+  });
 
   const load = async (search = query) => {
     setLoading(true);
-    try { const response = await patientsAPI.list({ search }); setRows(response.items); }
-    catch { toast.error('Failed to load patients'); }
-    finally { setLoading(false); }
+    try { 
+      const response = await patientsAPI.list({ search }); 
+      setRows(response.items || []); 
+    }
+    catch { 
+      toast.error('Failed to load patients'); 
+    }
+    finally { 
+      setLoading(false); 
+    }
   };
 
   useEffect(() => { load(queryFromUrl); }, [queryFromUrl]);
@@ -58,170 +71,381 @@ export default function Patients() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const openCreate = () => { setEditing(null); reset({ first_name: '', last_name: '', email: '', phone: '', gender: 'M', date_of_birth: '', address: '' }); setOpen(true); };
-  const openEdit = (row) => { setEditing(row); reset({ first_name: row.first_name, last_name: row.last_name, email: row.email || '', phone: row.phone, gender: row.gender || 'M', date_of_birth: row.date_of_birth || '', address: row.address || '' }); setOpen(true); };
-  const onSubmit = async (values) => {
-    try { if (editing) { await patientsAPI.update(editing.id, values); toast.success('Patient updated'); } else { await patientsAPI.create(values); toast.success('Patient created'); } setOpen(false); await load(); }
-    catch { toast.error('Unable to save patient'); }
+  const openCreate = () => { 
+    setEditing(null); 
+    reset({ first_name: '', last_name: '', email: '', phone: '', gender: 'M', date_of_birth: '', address: '' }); 
+    setOpen(true); 
   };
-  const onDelete = async (id) => { try { await patientsAPI.delete(id); toast.success('Patient deleted'); await load(); } catch { toast.error('Unable to delete patient'); } };
-  const viewPatientDetails = async (patient) => { setViewPatient(patient); try { const response = await appointmentsAPI.list({ patient: patient.id }); setViewAppointments(response.items.filter(a => a.patient === patient.id)); } catch { setViewAppointments([]); } };
+  
+  const openEdit = (row) => { 
+    setEditing(row); 
+    reset({ 
+      first_name: row.first_name, 
+      last_name: row.last_name, 
+      email: row.email || '', 
+      phone: row.phone, 
+      gender: row.gender || 'M', 
+      date_of_birth: row.date_of_birth || '', 
+      address: row.address || '' 
+    }); 
+    setOpen(true); 
+  };
+
+  const onSubmit = async (values) => {
+    try { 
+      if (editing) { 
+        await patientsAPI.update(editing.id, values); 
+        toast.success('Patient updated successfully'); 
+      } else { 
+        await patientsAPI.create(values); 
+        toast.success('Patient created successfully'); 
+      } 
+      setOpen(false); 
+      await load(); 
+    }
+    catch { 
+      toast.error(editing ? 'Unable to update patient' : 'Unable to create patient'); 
+    }
+  };
+
+  const confirmDelete = (id) => setDeleteId(id);
+  const onDelete = async () => { 
+    if (!deleteId) return;
+    try { 
+      await patientsAPI.delete(deleteId); 
+      toast.success('Patient deleted successfully'); 
+      await load(); 
+    } catch { 
+      toast.error('Unable to delete patient'); 
+    } finally {
+      setDeleteId(null);
+    }
+  };
+
+  const viewPatientDetails = async (patient) => { 
+    setViewPatient(patient); 
+    try { 
+      const response = await appointmentsAPI.list({ patient: patient.id }); 
+      setViewAppointments((response.items || []).filter(a => a.patient === patient.id)); 
+    } catch { 
+      setViewAppointments([]); 
+    } 
+  };
 
   return (
-    <motion.div className="space-y-6" initial="initial" animate="animate" variants={stagger}>
-      <PageHeader title="Patients" subtitle="Manage patient records" icon={Users} actions={canManagePatients && (
-        <motion.button onClick={openCreate} className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all ${isDark ? 'hover:shadow-blue-900/50' : 'hover:shadow-blue-200'}`} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Plus size={16} /> New Patient
-        </motion.button>
-      )} />
+    <div className="space-y-6 max-w-[1400px] mx-auto w-full">
+      <PageHeader 
+        title="Patients" 
+        subtitle={`Showing ${filtered.length} total patients`}
+        actions={
+          <>
+            <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition-colors">
+              <Download size={16} /> Export
+            </button>
+            {canManagePatients && (
+              <button 
+                onClick={openCreate} 
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+              >
+                <Plus size={16} /> Add patient
+              </button>
+            )}
+          </>
+        } 
+      />
 
-      <motion.div className={`rounded-2xl border p-4 shadow-sm transition-colors ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`} variants={fadeIn}>
-        <form className="flex flex-wrap items-center gap-3" onSubmit={(e) => { e.preventDefault(); setPage(1); load(query); }}>
-          <motion.div className={`flex h-12 flex-1 min-w-[200px] items-center gap-2 rounded-xl border px-4 transition-colors ${isDark ? 'border-slate-600 bg-slate-700' : 'border-slate-200 bg-slate-50'}`} whileFocus={{ scale: 1.01 }}>
-            <Search size={18} className={isDark ? 'text-slate-500' : 'text-slate-400'} />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search patients..." className={`w-full border-none bg-transparent text-sm outline-none ${isDark ? 'text-slate-100 placeholder:text-slate-500' : 'text-slate-900 placeholder:text-slate-400'}`} />
-          </motion.div>
-          <motion.button type="submit" className={`rounded-xl border px-5 py-2.5 text-sm font-medium transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 hover:bg-slate-600' : 'border-slate-300 bg-slate-900 text-white hover:bg-slate-800'}`} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-            Search
-          </motion.button>
-        </form>
-      </motion.div>
-
-      {loading ? <TableSkeleton isDark={isDark} /> : filtered.length === 0 ? <EmptyState title="No patients found" description="Try a different search" isDark={isDark} /> : (
-        <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" variants={stagger}>
-          <AnimatePresence>
-            {paged.map((row, idx) => (
-              <motion.article key={row.id} className={`group relative overflow-hidden rounded-2xl border p-4 shadow-sm transition-colors ${isDark ? 'border-slate-700 bg-slate-800 hover:bg-slate-700/50' : 'border-slate-200/80 bg-white'}`} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ delay: idx * 0.04 }} whileHover={{ y: -4 }}>
-                <motion.div className={`absolute -right-8 -top-8 h-20 w-20 rounded-full opacity-0 group-hover:opacity-100 ${isDark ? 'bg-gradient-to-br from-slate-700 to-slate-600' : 'bg-gradient-to-br from-emerald-50 to-emerald-100'}`} animate={{ opacity: [0, 0.5, 0] }} transition={{ duration: 2, repeat: Infinity }} />
-                <div className="relative">
-                  <div className="flex items-center gap-3">
-                    <motion.div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-lg font-bold text-white shadow transition-colors ${isDark ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 'bg-gradient-to-br from-emerald-400 to-emerald-500'}`} whileHover={{ rotate: 5 }}>
-                      {row.first_name?.charAt(0)}{row.last_name?.charAt(0)}
-                    </motion.div>
-                    <div className="min-w-0">
-                      <p className={`font-heading truncate font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{row.full_name}</p>
-                      <p className={`truncate text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{row.gender === 'M' ? 'Male' : row.gender === 'F' ? 'Female' : 'Other'}</p>
-                    </div>
-                  </div>
-                  <div className={`mt-3 space-y-1.5 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    <div className="flex items-center gap-2 truncate"><Phone size={12} className="shrink-0" /><span className="truncate">{row.phone}</span></div>
-                    <div className="flex items-center gap-2 truncate"><Mail size={12} className="shrink-0" /><span className="truncate">{row.email || 'No email'}</span></div>
-                    <div className="flex items-center gap-2"><Calendar size={12} className="shrink-0" /><span>{row.date_of_birth || 'No DOB'}</span></div>
-                  </div>
-                  <div className="mt-4 flex items-center justify-end gap-1.5">
-                    <motion.button onClick={() => viewPatientDetails(row)} className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${isDark ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`} whileHover={{ scale: 1.1 }}>View</motion.button>
-                    {canManagePatients && (
-                      <motion.button onClick={() => openEdit(row)} className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`} whileHover={{ scale: 1.1 }}>Edit</motion.button>
-                    )}
-                  </div>
-                </div>
-              </motion.article>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-      )}
-
-      {totalPages > 1 && (
-        <div className={`flex items-center justify-between rounded-2xl border p-5 shadow-sm transition-colors ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`}>
-          <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Page {page} of {totalPages}</p>
-          <div className="flex items-center gap-2">
-            <motion.button disabled={page === 1} onClick={() => setPage(v => Math.max(1, v - 1))} className={`rounded-xl border px-4 py-2 text-sm transition-colors ${isDark ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'} disabled:opacity-50`} whileHover={{ scale: page === 1 ? 1 : 1.02 }}>Previous</motion.button>
-            <motion.button disabled={page === totalPages} onClick={() => setPage(v => Math.min(totalPages, v + 1))} className={`rounded-xl border px-4 py-2 text-sm transition-colors ${isDark ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'} disabled:opacity-50`} whileHover={{ scale: page === totalPages ? 1 : 1.02 }}>Next</motion.button>
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-4">
+        <form 
+          className="flex flex-col sm:flex-row items-center gap-3" 
+          onSubmit={(e) => { e.preventDefault(); setPage(1); load(query); }}
+        >
+          <div className="relative w-full sm:max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              value={query} 
+              onChange={(e) => setQuery(e.target.value)} 
+              placeholder="Search patients, MRN..." 
+              className="h-10 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-3 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600" 
+            />
           </div>
+          <button 
+            type="submit" 
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-medium transition-colors"
+          >
+            Search
+          </button>
+        </form>
+      </div>
+
+      {loading ? <TableSkeleton rows={8} /> : filtered.length === 0 ? (
+        <EmptyState title="No patients found" description="Try adjusting your search or filters." />
+      ) : (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50/60 dark:bg-slate-900/40">
+                <tr>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Patient</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Age/Sex</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Contact</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Last Visit</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                  <th className="h-10 px-5 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide w-16"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {paged.map((row) => (
+                  <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs font-medium shrink-0">
+                          {row.first_name?.charAt(0)}{row.last_name?.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-900 dark:text-slate-100 group-hover:text-teal-700 dark:group-hover:text-teal-400 transition-colors">{row.full_name}</p>
+                          <p className="text-xs text-slate-500 font-mono mt-0.5">PT-{row.id.toString().padStart(4, '0')}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-slate-600 dark:text-slate-300">
+                      <div className="text-sm">{row.date_of_birth ? new Date().getFullYear() - new Date(row.date_of_birth).getFullYear() + ' yrs' : '-'}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{row.gender === 'M' ? 'Male' : row.gender === 'F' ? 'Female' : 'Other'}</div>
+                    </td>
+                    <td className="px-5 py-3 text-slate-600 dark:text-slate-300">
+                      <div className="text-sm truncate max-w-[150px]">{row.phone || '-'}</div>
+                      <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[150px]">{row.email || '-'}</div>
+                    </td>
+                    <td className="px-5 py-3 text-slate-600 dark:text-slate-300">
+                      <div className="text-sm">-</div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusBadge value="Discharged" />
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => viewPatientDetails(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-100" title="View details">
+                          <Eye size={16} />
+                        </button>
+                        {canManagePatients && (
+                          <>
+                            <button onClick={() => openEdit(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-100" title="Edit patient">
+                              <Edit size={16} />
+                            </button>
+                            <button onClick={() => confirmDelete(row.id)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 dark:hover:text-rose-400" title="Delete patient">
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {totalPages > 1 && (
+            <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/40">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Showing {(page - 1) * PAGE_SIZE + 1} to {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}</p>
+              <div className="flex items-center gap-2">
+                <button 
+                  disabled={page === 1} 
+                  onClick={() => setPage(v => Math.max(1, v - 1))} 
+                  className="inline-flex items-center gap-2 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium disabled:opacity-50 transition-colors"
+                >
+                  Previous
+                </button>
+                <button 
+                  disabled={page === totalPages} 
+                  onClick={() => setPage(v => Math.min(totalPages, v + 1))} 
+                  className="inline-flex items-center gap-2 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium disabled:opacity-50 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      <AppModal open={open && canManagePatients} onClose={() => setOpen(false)} title={editing ? 'Update Patient' : 'Add New Patient'}>
-        <form onSubmit={handleSubmit(onSubmit)} className="grid gap-5">
+      {/* Create/Edit Modal */}
+      <AppModal 
+        open={open && canManagePatients} 
+        onClose={() => setOpen(false)} 
+        title={editing ? 'Edit Patient' : 'Add New Patient'}
+        size="lg"
+        footer={
+          <>
+            <button 
+              type="button" 
+              onClick={() => setOpen(false)}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleSubmit(onSubmit)}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors disabled:opacity-50"
+            >
+              {editing ? 'Save changes' : 'Add patient'}
+            </button>
+          </>
+        }
+      >
+        <div className="grid gap-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>First Name *</label>
-              <input {...register('first_name')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300'}`} />
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Last Name *</label>
-              <input {...register('last_name')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300'}`} />
-            </div>
+            <FormField 
+              label="First Name" 
+              required 
+              {...register('first_name')} 
+              error={errors.first_name?.message} 
+              touched={touchedFields.first_name}
+            />
+            <FormField 
+              label="Last Name" 
+              required 
+              {...register('last_name')} 
+              error={errors.last_name?.message} 
+              touched={touchedFields.last_name}
+            />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Email</label>
-              <input type="email" {...register('email')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300'}`} />
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Phone *</label>
-              <input {...register('phone')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300'}`} />
-            </div>
+            <FormField 
+              label="Email" 
+              type="email" 
+              {...register('email')} 
+              error={errors.email?.message} 
+              touched={touchedFields.email}
+            />
+            <FormField 
+              label="Phone" 
+              required 
+              {...register('phone')} 
+              error={errors.phone?.message} 
+              touched={touchedFields.phone}
+            />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Gender *</label>
-              <select {...register('gender')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300'}`}>
-                <option value="M">Male</option>
-                <option value="F">Female</option>
-                <option value="O">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Date of Birth</label>
-              <input type="date" {...register('date_of_birth')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 focus:border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-300'}`} />
-            </div>
+            <FormField 
+              label="Gender" 
+              type="select" 
+              required 
+              {...register('gender')} 
+              error={errors.gender?.message} 
+              touched={touchedFields.gender}
+              options={[
+                { value: 'M', label: 'Male' },
+                { value: 'F', label: 'Female' },
+                { value: 'O', label: 'Other' },
+              ]}
+            />
+            <FormField 
+              label="Date of Birth" 
+              type="date" 
+              {...register('date_of_birth')} 
+              error={errors.date_of_birth?.message} 
+              touched={touchedFields.date_of_birth}
+            />
           </div>
-          <div>
-            <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Address</label>
-            <textarea {...register('address')} rows={2} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 placeholder:text-slate-500 focus:border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:border-blue-300'}`} />
-          </div>
-          <motion.button disabled={isSubmitting} className="mt-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-lg" whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>{editing ? 'Update Patient' : 'Create Patient'}</motion.button>
-        </form>
+          <FormField 
+            label="Address" 
+            type="textarea" 
+            rows={3} 
+            {...register('address')} 
+            error={errors.address?.message} 
+            touched={touchedFields.address}
+          />
+        </div>
       </AppModal>
 
-      <AppModal open={!!viewPatient} onClose={() => setViewPatient(null)} title={viewPatient?.full_name} size="lg">
-        <motion.div className="space-y-6" initial="initial" animate="animate" variants={stagger}>
-          <motion.div className="flex items-center gap-4" variants={fadeIn}>
-            <div className={`grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-xl font-bold text-white shadow transition-colors ${isDark ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 'bg-gradient-to-br from-emerald-400 to-emerald-500'}`}>{viewPatient?.first_name?.charAt(0)}{viewPatient?.last_name?.charAt(0)}</div>
-            <div>
-              <p className={`font-heading text-xl font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{viewPatient?.full_name}</p>
-              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{viewPatient?.gender === 'M' ? 'Male' : viewPatient?.gender === 'F' ? 'Female' : 'Other'}</p>
+      {/* View Details Modal */}
+      <AppModal 
+        open={!!viewPatient} 
+        onClose={() => setViewPatient(null)} 
+        title="Patient Record" 
+        size="lg"
+        footer={
+          <button 
+            onClick={() => setViewPatient(null)}
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+          >
+            Close
+          </button>
+        }
+      >
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl font-medium text-slate-600 dark:text-slate-300 shrink-0">
+              {viewPatient?.first_name?.charAt(0)}{viewPatient?.last_name?.charAt(0)}
             </div>
-          </motion.div>
-          <div className={`grid grid-cols-2 gap-4 rounded-xl p-4 transition-colors ${isDark ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
             <div>
-              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-400'}`}>Phone</p>
-              <p className={`font-medium ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{viewPatient?.phone}</p>
-            </div>
-            <div>
-              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-400'}`}>Email</p>
-              <p className={`font-medium ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{viewPatient?.email || 'N/A'}</p>
-            </div>
-            <div>
-              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-400'}`}>DOB</p>
-              <p className={`font-medium ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{viewPatient?.date_of_birth || 'N/A'}</p>
-            </div>
-            <div className="col-span-2">
-              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-400'}`}>Address</p>
-              <p className={`font-medium ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{viewPatient?.address || 'N/A'}</p>
+              <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{viewPatient?.full_name}</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">PT-{viewPatient?.id?.toString().padStart(4, '0')} • {viewPatient?.gender === 'M' ? 'Male' : viewPatient?.gender === 'F' ? 'Female' : 'Other'}</p>
             </div>
           </div>
+          
+          <div className="grid sm:grid-cols-2 gap-4 rounded-xl border border-slate-100 dark:border-slate-800 p-5 bg-slate-50/50 dark:bg-slate-900/40">
+            <div>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Contact Details</p>
+              <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                <div className="flex items-start gap-2">
+                  <Phone size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                  <span>{viewPatient?.phone || 'N/A'}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Mail size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                  <span>{viewPatient?.email || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Personal Details</p>
+              <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                <div className="flex items-start gap-2">
+                  <Calendar size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                  <span>DOB: {viewPatient?.date_of_birth || 'N/A'}</span>
+                </div>
+                <div className="flex flex-col gap-1 mt-2">
+                  <span className="text-xs text-slate-500">Address</span>
+                  <span>{viewPatient?.address || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <div>
-            <p className={`mb-3 text-sm font-semibold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>Appointments ({viewAppointments.length})</p>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Recent Appointments</h3>
             {viewAppointments.length === 0 ? (
-              <p className={`rounded-xl p-4 text-sm transition-colors ${isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>No appointments</p>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                No appointments found for this patient.
+              </div>
             ) : (
-              <div className={`max-h-40 space-y-2 overflow-y-auto rounded-xl border p-2 transition-colors ${isDark ? 'border-slate-700 bg-slate-700/30' : 'border-slate-200'}`}>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
                 {viewAppointments.slice(0, 5).map((apt) => (
-                  <motion.div key={apt.id} className={`flex items-center justify-between rounded-lg p-3 transition-colors ${isDark ? 'bg-slate-700/50 hover:bg-slate-700' : 'bg-slate-50 hover:bg-slate-100'}`} whileHover={{ scale: 1.01 }}>
+                  <div key={apt.id} className="p-4 bg-white dark:bg-slate-900 flex items-center justify-between">
                     <div>
-                      <p className={`font-medium ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{apt.doctor_name}</p>
-                      <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{apt.appointment_date}</p>
+                      <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{apt.doctor_name || 'Unassigned Doctor'}</p>
+                      <p className="text-xs text-slate-500 mt-1">{new Date(apt.appointment_date).toLocaleDateString()}</p>
                     </div>
-                    <span className={`rounded-lg px-2.5 py-1 text-xs font-medium ${apt.status === 'completed' ? isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700' : apt.status === 'cancelled' ? isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700' : apt.status === 'pending' ? isDark ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-700' : isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>{apt.status}</span>
-                  </motion.div>
+                    <StatusBadge value={apt.status} />
+                  </div>
                 ))}
               </div>
             )}
           </div>
-        </motion.div>
+        </div>
       </AppModal>
-    </motion.div>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog 
+        isOpen={!!deleteId}
+        title="Delete Patient"
+        message="Are you sure you want to delete this patient record? This action cannot be undone."
+        onConfirm={onDelete}
+        onCancel={() => setDeleteId(null)}
+        isDangerous={true}
+      />
+    </div>
   );
 }

@@ -1,41 +1,45 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, CalendarDays, Clock, Filter, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, CalendarDays, Clock, Filter, X, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { useTheme } from '../context/ThemeContext.jsx';
 import { appointmentsAPI, doctorsAPI, patientsAPI } from '../api/services.js';
 import AppModal from '../components/common/AppModal.jsx';
 import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx';
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatusBadge from '../components/common/StatusBadge.jsx';
+import { FormField, ConfirmDialog } from '../components/common/UIStates.jsx';
 
 const schema = z.object({
-  patient: z.coerce.number().min(1),
-  doctor: z.coerce.number().min(1),
-  appointment_date: z.string().min(1),
+  patient: z.coerce.number().min(1, 'Patient is required'),
+  doctor: z.coerce.number().min(1, 'Doctor is required'),
+  appointment_date: z.string().min(1, 'Date is required'),
   appointment_time: z.string().optional(),
   status: z.enum(['scheduled', 'completed', 'cancelled', 'pending']),
   notes: z.string().optional(),
 });
 
-const fadeIn = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } };
-const stagger = { animate: { transition: { staggerChildren: 0.05 } } };
-
 export default function Appointments() {
-  const { isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  
+  const [deleteId, setDeleteId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [filterPatient, setFilterPatient] = useState('');
   const [filterDoctor, setFilterDoctor] = useState('');
+  const [dateFilter, setDateFilter] = useState('all');
 
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm({ resolver: zodResolver(schema), defaultValues: { status: 'scheduled' } });
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { status: 'scheduled' },
+  });
 
   const load = async () => {
     setLoading(true);
@@ -43,139 +47,330 @@ export default function Appointments() {
       const params = {};
       if (filterPatient) params.patient = filterPatient;
       if (filterDoctor) params.doctor = filterDoctor;
-      const [a, p, d] = await Promise.all([appointmentsAPI.list(params), patientsAPI.list(), doctorsAPI.list()]);
-      setRows(a.items);
-      setPatients(p.items);
-      setDoctors(d.items);
-    } catch { toast.error('Failed to load appointments'); }
-    finally { setLoading(false); }
+      
+      // Simple client-side date filtering below since API might not support these exact text params
+      // but we will fetch all matching patient/doctor and filter in memory if needed for 'dateFilter'
+      
+      const [a, p, d] = await Promise.all([
+        appointmentsAPI.list(params),
+        patientsAPI.list(),
+        doctorsAPI.list()
+      ]);
+      setRows(a.items || []);
+      setPatients(p.items || []);
+      setDoctors(d.items || []);
+    } catch {
+      toast.error('Failed to load appointments');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, [filterPatient, filterDoctor]);
 
-  const openCreate = () => { setEditing(null); reset({ patient: '', doctor: '', appointment_date: '', appointment_time: '', status: 'scheduled', notes: '' }); setOpen(true); };
-  const openEdit = (row) => { setEditing(row); reset({ patient: row.patient, doctor: row.doctor, appointment_date: row.appointment_date, appointment_time: row.appointment_time || '', status: row.status, notes: row.notes || '' }); setOpen(true); };
+  const openCreate = () => {
+    setEditing(null);
+    reset({ patient: '', doctor: '', appointment_date: '', appointment_time: '', status: 'scheduled', notes: '' });
+    setOpen(true);
+  };
+
+  const openEdit = (row) => {
+    setEditing(row);
+    reset({
+      patient: row.patient,
+      doctor: row.doctor,
+      appointment_date: row.appointment_date,
+      appointment_time: row.appointment_time || '',
+      status: row.status,
+      notes: row.notes || ''
+    });
+    setOpen(true);
+  };
+
   const onSubmit = async (values) => {
     try {
-      if (editing) { await appointmentsAPI.update(editing.id, values); toast.success('Appointment updated'); }
-      else { await appointmentsAPI.create(values); toast.success('Appointment created'); }
+      if (editing) {
+        await appointmentsAPI.update(editing.id, values);
+        toast.success('Appointment updated');
+      } else {
+        await appointmentsAPI.create(values);
+        toast.success('Appointment created');
+      }
       setOpen(false);
       await load();
-    } catch { toast.error('Unable to save appointment'); }
+    } catch {
+      toast.error('Unable to save appointment');
+    }
   };
-  const onDelete = async (id) => { try { await appointmentsAPI.delete(id); toast.success('Appointment deleted'); await load(); } catch { toast.error('Unable to delete appointment'); } };
+
+  const confirmDelete = (id) => setDeleteId(id);
+  
+  const onDelete = async () => {
+    if (!deleteId) return;
+    setIsDeleting(true);
+    try {
+      await appointmentsAPI.delete(deleteId);
+      toast.success('Appointment deleted');
+      await load();
+    } catch {
+      toast.error('Unable to delete appointment');
+    } finally {
+      setIsDeleting(false);
+      setDeleteId(null);
+    }
+  };
+
+  const filteredRows = rows.filter(row => {
+    if (dateFilter === 'all') return true;
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    
+    if (dateFilter === 'today') return row.appointment_date === today;
+    if (dateFilter === 'tomorrow') return row.appointment_date === tomorrow;
+    if (dateFilter === 'week') {
+      const rowDate = new Date(row.appointment_date);
+      const now = new Date();
+      const diffTime = Math.abs(rowDate - now);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 7 && rowDate >= new Date(today);
+    }
+    return true;
+  });
 
   return (
-    <motion.div className="space-y-6" initial="initial" animate="animate" variants={stagger}>
-      <PageHeader title="Appointments" subtitle="Manage consultations and schedules" icon={CalendarDays} actions={
-        <motion.button onClick={openCreate} className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all ${isDark ? 'hover:shadow-blue-900/50' : 'hover:shadow-blue-200'}`} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Plus size={16} /> New Appointment
-        </motion.button>
-      } />
+    <div className="space-y-6 max-w-[1400px] mx-auto w-full">
+      <PageHeader
+        title="Appointments"
+        subtitle="Manage consultations and schedules"
+        actions={
+          <button
+            onClick={openCreate}
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+          >
+            <Plus className="w-4 h-4" /> New Appointment
+          </button>
+        }
+      />
 
-      <motion.div className={`flex flex-wrap items-center gap-3 rounded-2xl border p-4 shadow-sm transition-colors ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`} variants={fadeIn}>
-        <div className="flex items-center gap-2"><Filter size={16} className={isDark ? 'text-slate-500' : 'text-slate-400'} /><span className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>Filters:</span></div>
-        <motion.select value={filterPatient} onChange={(e) => setFilterPatient(e.target.value)} className={`rounded-xl border px-3 py-2 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`} whileFocus={{ scale: 1.02 }}>
-          <option value="">All patients</option>
-          {patients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-        </motion.select>
-        <motion.select value={filterDoctor} onChange={(e) => setFilterDoctor(e.target.value)} className={`rounded-xl border px-3 py-2 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`} whileFocus={{ scale: 1.02 }}>
-          <option value="">All doctors</option>
-          {doctors.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}
-        </motion.select>
-        <motion.button onClick={load} className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${isDark ? 'bg-slate-700 text-slate-100 hover:bg-slate-600' : 'bg-slate-900 text-white hover:bg-slate-800'}`} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>Apply</motion.button>
-        {(filterPatient || filterDoctor) && <motion.button onClick={() => { setFilterPatient(''); setFilterDoctor(''); }} className={`text-sm transition-colors ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`} whileHover={{ scale: 1.05 }}>Clear</motion.button>}
-      </motion.div>
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setDateFilter('all')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${dateFilter === 'all' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setDateFilter('today')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${dateFilter === 'today' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setDateFilter('tomorrow')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${dateFilter === 'tomorrow' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              Tomorrow
+            </button>
+            <button
+              onClick={() => setDateFilter('week')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${dateFilter === 'week' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              This week
+            </button>
+          </div>
+          <div className="flex items-center gap-3">
+            <select
+              value={filterPatient}
+              onChange={(e) => setFilterPatient(e.target.value)}
+              className="h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+            >
+              <option value="">All patients</option>
+              {patients.map((p) => (
+                <option key={p.id} value={p.id}>{p.full_name}</option>
+              ))}
+            </select>
+            <select
+              value={filterDoctor}
+              onChange={(e) => setFilterDoctor(e.target.value)}
+              className="h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+            >
+              <option value="">All doctors</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>{d.full_name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-      {loading ? <TableSkeleton isDark={isDark} /> : rows.length === 0 ? <EmptyState isDark={isDark} /> : (
-        <motion.div className={`rounded-2xl border shadow-sm overflow-hidden transition-colors ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`} variants={fadeIn}>
-          <AnimatePresence>
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <thead>
-                <tr className={`border-b transition-colors ${isDark ? 'border-slate-700 bg-slate-700/50' : 'border-slate-200 bg-gradient-to-r from-slate-50 to-white'}`}>
-                  <th className={`px-5 py-4 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Patient</th>
-                  <th className={`px-5 py-4 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Doctor</th>
-                  <th className={`px-5 py-4 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Date & Time</th>
-                  <th className={`px-5 py-4 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Status</th>
-                  <th className={`px-5 py-4 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Actions</th>
+        <div className="p-0 overflow-x-auto">
+          {loading ? (
+            <div className="p-5"><TableSkeleton rows={5} /></div>
+          ) : filteredRows.length === 0 ? (
+            <EmptyState icon={CalendarDays} title="No appointments found" description="Adjust your filters or create a new appointment." />
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50/60 dark:bg-slate-900/40">
+                <tr>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date & Time</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Patient</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Doctor</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                  <th className="h-10 px-5 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, idx) => (
-                  <motion.tr key={row.id} className={`border-b transition-colors ${isDark ? 'border-slate-700 hover:bg-slate-700/30' : 'border-slate-100 hover:bg-slate-50/50'}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ delay: idx * 0.03 }} whileHover={{ x: 4 }}>
-                    <td className="px-5 py-4">
+                {filteredRows.map((row) => (
+                  <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
+                    <td className="px-5 py-3">
+                      <div className="font-medium text-slate-900 dark:text-slate-100">{row.appointment_date}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{row.appointment_time || 'Time TBD'}</div>
+                    </td>
+                    <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <motion.div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-sm font-bold transition-colors ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-emerald-100 text-emerald-600'}`} whileHover={{ rotate: 5 }}>
-                          {row.patient_name?.charAt(0)}
-                        </motion.div>
-                        <span className={`font-medium ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{row.patient_name}</span>
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs font-medium shrink-0">
+                          {row.patient_name?.charAt(0) || '?'}
+                        </div>
+                        <div>
+                          <div className="font-medium text-slate-900 dark:text-slate-100 group-hover:text-teal-700 dark:group-hover:text-teal-400 transition-colors">{row.patient_name}</div>
+                        </div>
                       </div>
                     </td>
-                    <td className={`px-5 py-4 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{row.doctor_name}</td>
-                    <td className="px-5 py-4">
-                      <div className={`flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}><Clock size={14} className={isDark ? 'text-slate-500' : 'text-slate-400'} /><span>{row.appointment_date}</span><span className={isDark ? 'text-slate-600' : 'text-slate-400'}>|</span><span>{row.appointment_time || 'N/A'}</span></div>
+                    <td className="px-5 py-3 text-slate-600 dark:text-slate-300">{row.doctor_name || 'Unassigned'}</td>
+                    <td className="px-5 py-3">
+                      <StatusBadge value={row.status} />
                     </td>
-                    <td className="px-5 py-4"><StatusBadge value={row.status} /></td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <motion.button onClick={() => openEdit(row)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`} whileHover={{ scale: 1.1 }}>Edit</motion.button>
-                        <motion.button onClick={() => onDelete(row.id)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${isDark ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50' : 'bg-red-50 text-red-600 hover:bg-red-100'}`} whileHover={{ scale: 1.1 }}>Delete</motion.button>
+                    <td className="px-5 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEdit(row)}
+                          className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => confirmDelete(row.id)}
+                          className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-medium transition-colors"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </td>
-                  </motion.tr>
+                  </tr>
                 ))}
               </tbody>
             </table>
-          </AnimatePresence>
-        </motion.div>
-      )}
+          )}
+        </div>
+      </div>
 
-      <AppModal open={open} onClose={() => setOpen(false)} title={editing ? 'Update Appointment' : 'Create Appointment'}>
-        <form onSubmit={handleSubmit(onSubmit)} className="grid gap-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Patient *</label>
-              <select {...register('patient')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`}>
-                <option value="">Select patient</option>
-                {patients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Doctor *</label>
-              <select {...register('doctor')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`}>
-                <option value="">Select doctor</option>
-                {doctors.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}
-              </select>
-            </div>
+      <AppModal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={editing ? 'Update Appointment' : 'New Appointment'}
+        size="md"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit(onSubmit)}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium disabled:opacity-50"
+            >
+              {editing ? 'Save Changes' : 'Create'}
+            </button>
+          </>
+        }
+      >
+        <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              label="Patient"
+              name="patient"
+              type="select"
+              options={patients.map(p => ({ value: p.id, label: p.full_name }))}
+              value={register('patient').value}
+              {...register('patient')}
+              error={errors.patient?.message}
+              touched={!!errors.patient}
+              required
+            />
+            <FormField
+              label="Doctor"
+              name="doctor"
+              type="select"
+              options={doctors.map(d => ({ value: d.id, label: d.full_name }))}
+              value={register('doctor').value}
+              {...register('doctor')}
+              error={errors.doctor?.message}
+              touched={!!errors.doctor}
+              required
+            />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Date *</label>
-              <input type="date" {...register('appointment_date')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`} />
-            </div>
-            <div>
-              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Time</label>
-              <input type="time" {...register('appointment_time')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`} />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              label="Date"
+              name="appointment_date"
+              type="date"
+              {...register('appointment_date')}
+              error={errors.appointment_date?.message}
+              touched={!!errors.appointment_date}
+              required
+            />
+            <FormField
+              label="Time"
+              name="appointment_time"
+              type="time"
+              {...register('appointment_time')}
+              error={errors.appointment_time?.message}
+              touched={!!errors.appointment_time}
+            />
           </div>
-          <div>
-            <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Status</label>
-            <select {...register('status')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`}>
-              <option value="scheduled">Scheduled</option>
-              <option value="completed">Completed</option>
-              <option value="pending">Pending</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-          <div>
-            <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Notes</label>
-            <textarea {...register('notes')} rows={3} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 placeholder:text-slate-500' : 'border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400'}`} placeholder="Add notes..." />
-          </div>
-          <motion.button disabled={isSubmitting} className="mt-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-lg" whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-            {editing ? 'Update Appointment' : 'Create Appointment'}
-          </motion.button>
+          <FormField
+            label="Status"
+            name="status"
+            type="select"
+            options={[
+              { value: 'scheduled', label: 'Scheduled' },
+              { value: 'pending', label: 'Pending' },
+              { value: 'completed', label: 'Completed' },
+              { value: 'cancelled', label: 'Cancelled' },
+            ]}
+            {...register('status')}
+            error={errors.status?.message}
+            touched={!!errors.status}
+          />
+          <FormField
+            label="Notes"
+            name="notes"
+            type="textarea"
+            placeholder="Add any notes..."
+            rows={3}
+            {...register('notes')}
+            error={errors.notes?.message}
+            touched={!!errors.notes}
+          />
         </form>
       </AppModal>
-    </motion.div>
+
+      <ConfirmDialog
+        isOpen={!!deleteId}
+        title="Delete Appointment"
+        message="Are you sure you want to delete this appointment? This action cannot be undone."
+        onConfirm={onDelete}
+        onCancel={() => setDeleteId(null)}
+        isLoading={isDeleting}
+        isDangerous={true}
+      />
+    </div>
   );
 }
