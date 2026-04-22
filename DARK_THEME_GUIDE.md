@@ -198,3 +198,5 @@ transition-colors duration-300
 - Theme selection is client-side only
 - Works with all backend APIs
 - No additional environment variables needed
+
+
