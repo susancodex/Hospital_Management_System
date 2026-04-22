@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5001,
+    port: 5000,
     host: '0.0.0.0',
     allowedHosts: true,
     proxy: {
@@ -15,7 +15,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../../dist',
+    outDir: '../dist',
     sourcemap: true,
     emptyOutDir: true,
     chunkSizeWarningLimit: 1500

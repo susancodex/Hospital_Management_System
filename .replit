@@ -1,9 +1,10 @@
-modules = ["nodejs-20", "web", "python-3.12"]
+modules = ["nodejs-20", "python-3.12", "web"]
 [agent]
 expertMode = true
 
 [nix]
 channel = "stable-25_05"
+packages = ["freetype", "glibcLocales"]
 
 [workflows]
 runButton = "Project"
@@ -25,38 +26,33 @@ args = "Start application"
 name = "Backend API"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python manage.py runserver localhost:8000"
-waitForPort = 8000
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python manage.py runserver 0.0.0.0:8000"
+waitForPort = 8000
 
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm run dev"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd frontend && npm run dev"
+waitForPort = 5000
 
 [[ports]]
 localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 5001
-externalPort = 3001
-
-[[ports]]
 localPort = 8000
 externalPort = 8000
-exposeLocalhost = true
 
 [deployment]
 deploymentTarget = "static"
