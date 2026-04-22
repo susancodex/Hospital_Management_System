@@ -51,10 +51,15 @@ const patchWithFallback = async (primaryUrl, fallbackUrl, payload, config) => {
 };
 
 export const authAPI = {
+  getAuthConfig: () => apiClient.get('/auth-config/'),
+
   login: (username, password) =>
     postWithFallback('/token/', null, { username, password }),
 
   register: (data) => postWithFallback('/register/', null, data),
+
+  googleLogin: (credential) =>
+    apiClient.post('/google-login/', { credential }),
 
   refreshToken: (refresh) =>
     apiClient.post('/token/refresh/', { refresh }),

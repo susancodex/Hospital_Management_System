@@ -19,7 +19,13 @@ const pageTitles = {
   '/profile': 'Profile',
 };
 
-const roleLabels = { admin: 'Administrator', doctor: 'Doctor', reception: 'Receptionist' };
+const roleLabels = { admin: 'Administrator', doctor: 'Doctor', patient: 'Patient', reception: 'Receptionist' };
+
+const buildNotifications = (user) => [
+  { id: 1, title: 'Profile synced', detail: `Signed in as ${roleLabels[user?.role] || 'User'}.`, unread: true },
+  { id: 2, title: 'Theme preferences', detail: 'Your appearance settings now persist across pages.', unread: true },
+  { id: 3, title: 'System status', detail: 'Hospital dashboard services are online.', unread: false },
+];
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -27,10 +33,13 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const { openMobileSidebar, search, setSearch } = useUIStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState(() => buildNotifications(user));
   const [searchResults, setSearchResults] = useState([]);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const dropdownRef = useRef(null);
   const searchRef = useRef(null);
+  const notificationsRef = useRef(null);
   const debounced = useDebounce(search, 300);
 
   const pageTitle = useMemo(() => pageTitles[location.pathname] || 'AetherCare', [location.pathname]);
@@ -39,10 +48,21 @@ export default function Navbar() {
     const onClick = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setDropdownOpen(false);
       if (searchRef.current && !searchRef.current.contains(e.target)) setSearchResults([]);
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) setNotificationsOpen(false);
     };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
+
+  useEffect(() => {
+    setNotifications(buildNotifications(user));
+  }, [user]);
+
+  useEffect(() => {
+    setDropdownOpen(false);
+    setNotificationsOpen(false);
+    setMobileSearchOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +84,7 @@ export default function Navbar() {
   };
 
   const initials = (user?.username || 'U').slice(0, 2).toUpperCase();
+  const unreadCount = notifications.filter((item) => item.unread).length;
 
   return (
     <header className="sticky top-0 z-40 h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
@@ -128,14 +149,60 @@ export default function Navbar() {
 
           <ThemeToggle />
 
-          <button
-            type="button"
-            className="relative hidden sm:inline-flex items-center justify-center h-9 w-9 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-            title="Notifications"
-          >
-            <Bell size={18} />
-            <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-rose-500" />
-          </button>
+          <div className="relative" ref={notificationsRef}>
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen((open) => !open)}
+              className="relative inline-flex items-center justify-center h-9 w-9 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              title="Notifications"
+            >
+              <Bell size={18} />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] leading-4 text-center">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+            {notificationsOpen && (
+              <div className="absolute right-0 top-11 w-72 sm:w-80 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Notifications</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{unreadCount} unread</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNotifications((items) => items.map((item) => ({ ...item, unread: false })))}
+                    className="text-xs font-medium text-teal-700 dark:text-teal-400 hover:underline"
+                  >
+                    Mark all read
+                  </button>
+                </div>
+                <div className="max-h-80 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                      No notifications right now.
+                    </div>
+                  ) : notifications.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setNotifications((items) => items.map((entry) => entry.id === item.id ? { ...entry, unread: false } : entry))}
+                      className="w-full text-left px-4 py-3 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className={`mt-1 h-2.5 w-2.5 rounded-full ${item.unread ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                        <div>
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.title}</p>
+                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{item.detail}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
 

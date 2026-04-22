@@ -6,19 +6,40 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { useAuthStore } from '../store/authStore.js';
 import { FormField } from '../components/common/UIStates.jsx';
+import GoogleSignInButton from '../components/auth/GoogleSignInButton.jsx';
 
 const schema = z
   .object({
+    role: z.enum(['doctor', 'patient']),
     first_name: z.string().min(2, 'First name is required'),
     last_name: z.string().min(2, 'Last name is required'),
     username: z.string().min(3, 'Username is required'),
     email: z.string().email('Valid email is required'),
+    phone: z.string().min(6, 'Phone number is required'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     password2: z.string().min(8, 'Confirm your password'),
+    specialization: z.string().optional(),
+    license_number: z.string().optional(),
+    date_of_birth: z.string().optional(),
+    gender: z.enum(['M', 'F', 'O']).optional(),
+    address: z.string().optional(),
   })
   .refine((values) => values.password === values.password2, {
     message: 'Passwords must match',
     path: ['password2'],
+  })
+  .superRefine((values, ctx) => {
+    if (values.role === 'doctor' && !values.specialization?.trim()) {
+      ctx.addIssue({ code: 'custom', path: ['specialization'], message: 'Specialization is required for doctors' });
+    }
+    if (values.role === 'patient') {
+      if (!values.date_of_birth) {
+        ctx.addIssue({ code: 'custom', path: ['date_of_birth'], message: 'Date of birth is required for patients' });
+      }
+      if (!values.gender) {
+        ctx.addIssue({ code: 'custom', path: ['gender'], message: 'Gender is required for patients' });
+      }
+    }
   });
 
 export default function Register() {
@@ -29,15 +50,26 @@ export default function Register() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, touchedFields },
-  } = useForm({ resolver: zodResolver(schema), mode: 'onBlur' });
+  } = useForm({
+    resolver: zodResolver(schema),
+    mode: 'onBlur',
+    defaultValues: {
+      role: 'patient',
+      gender: 'M',
+    },
+  });
+
+  const selectedRole = watch('role');
 
   const onSubmit = async (values) => {
     try {
       const result = await registerUser(values);
       if (result.ok) {
         toast.success('Account created successfully');
-        navigate('/dashboard');
+        const user = useAuthStore.getState().user;
+        navigate(user?.role === 'patient' ? '/profile' : '/dashboard');
       } else {
         toast.error(result.message);
       }
@@ -96,10 +128,26 @@ export default function Register() {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <FormField
+                  label="Register As"
+                  name="role"
+                  type="select"
+                  register={register}
+                  options={[
+                    { value: 'patient', label: 'Patient' },
+                    { value: 'doctor', label: 'Doctor' },
+                  ]}
+                  error={errors.role?.message}
+                  touched={touchedFields.role}
+                  required
+                />
+              </div>
               <div className="sm:col-span-1">
                 <FormField
                   label="First Name"
-                  {...register('first_name')}
+                  name="first_name"
+                  register={register}
                   error={errors.first_name?.message}
                   touched={touchedFields.first_name}
                 />
@@ -107,7 +155,8 @@ export default function Register() {
               <div className="sm:col-span-1">
                 <FormField
                   label="Last Name"
-                  {...register('last_name')}
+                  name="last_name"
+                  register={register}
                   error={errors.last_name?.message}
                   touched={touchedFields.last_name}
                 />
@@ -115,7 +164,8 @@ export default function Register() {
               <div className="sm:col-span-2">
                 <FormField
                   label="Username"
-                  {...register('username')}
+                  name="username"
+                  register={register}
                   error={errors.username?.message}
                   touched={touchedFields.username}
                 />
@@ -123,17 +173,89 @@ export default function Register() {
               <div className="sm:col-span-2">
                 <FormField
                   label="Email"
+                  name="email"
                   type="email"
-                  {...register('email')}
+                  register={register}
                   error={errors.email?.message}
                   touched={touchedFields.email}
                 />
               </div>
               <div className="sm:col-span-2">
                 <FormField
+                  label="Phone"
+                  name="phone"
+                  register={register}
+                  error={errors.phone?.message}
+                  touched={touchedFields.phone}
+                />
+              </div>
+              {selectedRole === 'doctor' ? (
+                <>
+                  <div className="sm:col-span-2">
+                    <FormField
+                      label="Specialization"
+                      name="specialization"
+                      register={register}
+                      error={errors.specialization?.message}
+                      touched={touchedFields.specialization}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <FormField
+                      label="License Number"
+                      name="license_number"
+                      register={register}
+                      error={errors.license_number?.message}
+                      touched={touchedFields.license_number}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="sm:col-span-1">
+                    <FormField
+                      label="Date of Birth"
+                      name="date_of_birth"
+                      type="date"
+                      register={register}
+                      error={errors.date_of_birth?.message}
+                      touched={touchedFields.date_of_birth}
+                    />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <FormField
+                      label="Gender"
+                      name="gender"
+                      type="select"
+                      register={register}
+                      options={[
+                        { value: 'M', label: 'Male' },
+                        { value: 'F', label: 'Female' },
+                        { value: 'O', label: 'Other' },
+                      ]}
+                      error={errors.gender?.message}
+                      touched={touchedFields.gender}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <FormField
+                      label="Address"
+                      name="address"
+                      type="textarea"
+                      rows={2}
+                      register={register}
+                      error={errors.address?.message}
+                      touched={touchedFields.address}
+                    />
+                  </div>
+                </>
+              )}
+              <div className="sm:col-span-2">
+                <FormField
                   label="Password"
+                  name="password"
                   type="password"
-                  {...register('password')}
+                  register={register}
                   error={errors.password?.message}
                   touched={touchedFields.password}
                 />
@@ -141,8 +263,9 @@ export default function Register() {
               <div className="sm:col-span-2">
                 <FormField
                   label="Confirm Password"
+                  name="password2"
                   type="password"
-                  {...register('password2')}
+                  register={register}
                   error={errors.password2?.message}
                   touched={touchedFields.password2}
                 />
@@ -170,19 +293,10 @@ export default function Register() {
             </div>
 
             <div className="mt-6">
-              <button 
-                type="button"
-                onClick={() => {}}
-                className="w-full inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition-colors"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                </svg>
-                Sign in with Google
-              </button>
+              <GoogleSignInButton onSuccess={() => {
+                const user = useAuthStore.getState().user;
+                navigate(user?.role === 'patient' ? '/profile' : '/dashboard');
+              }} />
             </div>
 
             <p className="mt-8 text-center text-sm text-slate-600 dark:text-slate-400">

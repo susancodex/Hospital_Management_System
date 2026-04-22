@@ -24,10 +24,21 @@ class UserSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
+    role = serializers.ChoiceField(choices=[('doctor', 'Doctor'), ('patient', 'Patient')], required=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    specialization = serializers.CharField(required=False, allow_blank=True)
+    license_number = serializers.CharField(required=False, allow_blank=True)
+    date_of_birth = serializers.DateField(required=False)
+    gender = serializers.ChoiceField(choices=Patient.GENDER_CHOICES, required=False)
+    address = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'password', 'password2', 'first_name', 'last_name')
+        fields = (
+            'username', 'email', 'password', 'password2', 'first_name', 'last_name',
+            'role', 'phone', 'specialization', 'license_number', 'date_of_birth',
+            'gender', 'address',
+        )
         extra_kwargs = {
             'first_name': {'required': True},
             'last_name': {'required': True},
@@ -41,15 +52,61 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"username": "Username already taken."})
         if User.objects.filter(email=attrs['email']).exists():
             raise serializers.ValidationError({"email": "Email already registered."})
+        role = attrs.get('role')
+        phone = (attrs.get('phone') or '').strip()
+        if role == 'doctor':
+            if not phone:
+                raise serializers.ValidationError({"phone": "Phone is required for doctor accounts."})
+            if not (attrs.get('specialization') or '').strip():
+                raise serializers.ValidationError({"specialization": "Specialization is required for doctor accounts."})
+            if Doctor.objects.filter(email__iexact=attrs['email']).exists():
+                raise serializers.ValidationError({"email": "A doctor profile with this email already exists."})
+        if role == 'patient':
+            if not phone:
+                raise serializers.ValidationError({"phone": "Phone is required for patient accounts."})
+            if not attrs.get('date_of_birth'):
+                raise serializers.ValidationError({"date_of_birth": "Date of birth is required for patient accounts."})
+            if not attrs.get('gender'):
+                raise serializers.ValidationError({"gender": "Gender is required for patient accounts."})
         return attrs
 
     def create(self, validated_data):
         validated_data.pop('password2')
         password = validated_data.pop('password')
+        role = validated_data.pop('role')
+        phone = validated_data.pop('phone', '')
+        specialization = validated_data.pop('specialization', '')
+        license_number = validated_data.pop('license_number', '')
+        date_of_birth = validated_data.pop('date_of_birth', None)
+        gender = validated_data.pop('gender', 'M')
+        address = validated_data.pop('address', '')
         user = User(**validated_data)
-        user.role = 'reception'
+        user.role = role
+        user.phone = phone
         user.set_password(password)
         user.save()
+
+        if role == 'doctor':
+            Doctor.objects.create(
+                user=user,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                email=user.email,
+                phone=phone,
+                specialization=specialization,
+                license_number=license_number,
+            )
+        elif role == 'patient':
+            Patient.objects.create(
+                user=user,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                email=user.email,
+                phone=phone,
+                date_of_birth=date_of_birth,
+                gender=gender,
+                address=address,
+            )
         return user
 
 

@@ -9,6 +9,7 @@ class User(AbstractUser):
     ROLE_CHOICES = [
         ('admin', 'Admin'),
         ('doctor', 'Doctor'),
+        ('patient', 'Patient'),
         ('nurse', 'Nurse'),
         ('reception', 'Reception'),
         ('pharmacist', 'Pharmacist'),
@@ -19,6 +20,12 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20, blank=True, default='')
     employee_id = models.CharField(max_length=50, blank=True, default='')
     last_active = models.DateTimeField(null=True, blank=True)
+    google_sub = models.CharField(max_length=255, null=True, blank=True, unique=True)
+
+    def save(self, *args, **kwargs):
+        if self.is_superuser and self.role != 'admin':
+            self.role = 'admin'
+        super().save(*args, **kwargs)
 
 
 class AuditLog(models.Model):
@@ -112,6 +119,7 @@ class Patient(models.Model):
     emergency_contact_phone = models.CharField(max_length=20, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='patient_profile')
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} #{self.mrn or self.id}"

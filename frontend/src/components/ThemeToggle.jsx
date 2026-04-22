@@ -6,6 +6,7 @@ export const ThemeToggle = () => {
 
   return (
     <button
+      type="button"
       onClick={toggleTheme}
       className={`relative inline-flex items-center justify-center p-2 rounded-lg transition-colors duration-200 ${
         isDark

@@ -9,11 +9,34 @@ def get_doctor_profile_for_user(user, DoctorModel):
     if not user or not getattr(user, 'is_authenticated', False):
         return None
 
+    try:
+        if user.doctor_profile:
+            return user.doctor_profile
+    except Exception:
+        pass
+
     email = (getattr(user, 'email', '') or '').strip()
     if not email:
         return None
 
     return DoctorModel.objects.filter(email__iexact=email).first()
+
+
+def get_patient_profile_for_user(user, PatientModel):
+    if not user or not getattr(user, 'is_authenticated', False):
+        return None
+
+    try:
+        if user.patient_profile:
+            return user.patient_profile
+    except Exception:
+        pass
+
+    email = (getattr(user, 'email', '') or '').strip()
+    if not email:
+        return None
+
+    return PatientModel.objects.filter(email__iexact=email).first()
 
 
 class RoleActionPermission(BasePermission):

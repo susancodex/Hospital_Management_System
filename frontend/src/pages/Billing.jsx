@@ -11,6 +11,8 @@ import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatusBadge from '../components/common/StatusBadge.jsx';
 import { FormField, ConfirmDialog } from '../components/common/UIStates.jsx';
+import { useAuth } from '../hooks/useAuth.js';
+import { hasPermission } from '../lib/permissions.js';
 
 const schema = z.object({
   patient: z.coerce.number().min(1, 'Patient is required'),
@@ -47,6 +49,8 @@ function KpiCard({ title, value, trend, trendUp, neutral = false }) {
 }
 
 export default function Billing() {
+  const { user } = useAuth();
+  const canManageBilling = hasPermission(user?.role, 'billing.manage');
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -225,9 +229,11 @@ export default function Billing() {
             <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm">
               <Download className="w-4 h-4" /> Export
             </button>
-            <button onClick={openCreate} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors">
-              <Plus className="w-4 h-4" /> New invoice
-            </button>
+            {canManageBilling ? (
+              <button onClick={openCreate} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors">
+                <Plus className="w-4 h-4" /> New invoice
+              </button>
+            ) : null}
           </>
         )}
       />
@@ -273,7 +279,7 @@ export default function Billing() {
               {loading ? (
                 <div className="p-5"><TableSkeleton rows={5} /></div>
               ) : rows.length === 0 ? (
-                <EmptyState title="No invoices found" description="Create an invoice to start billing." />
+                <EmptyState title="No invoices found" description={canManageBilling ? 'Create an invoice to start billing.' : 'Billing entries will appear here once available.'} />
               ) : (
                 <table className="w-full text-sm whitespace-nowrap">
                   <thead className="bg-slate-50/60 dark:bg-slate-900/40">
@@ -301,18 +307,24 @@ export default function Billing() {
                             <button onClick={() => setViewInvoice(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="View">
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button onClick={() => openPaymentCreate(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40" title="Record Payment">
-                              <Wallet className="w-4 h-4" />
-                            </button>
+                            {canManageBilling ? (
+                              <button type="button" onClick={() => openPaymentCreate(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40" title="Record Payment">
+                                <Wallet className="w-4 h-4" />
+                              </button>
+                            ) : null}
                             <button onClick={() => downloadInvoice(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40" title="Print/Download">
                               <ReceiptText className="w-4 h-4" />
                             </button>
-                            <button onClick={() => openEdit(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="Edit">
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => setDeleteId(row.id)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40" title="Delete">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canManageBilling ? (
+                              <>
+                                <button type="button" onClick={() => openEdit(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="Edit">
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button type="button" onClick={() => setDeleteId(row.id)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40" title="Delete">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -370,7 +382,7 @@ export default function Billing() {
 
       {/* Create/Edit Modal */}
       <AppModal 
-        open={open} 
+        open={open && canManageBilling} 
         onClose={() => setOpen(false)} 
         title={editing ? 'Edit Invoice' : 'New Invoice'} 
         size="md"
@@ -432,7 +444,7 @@ export default function Billing() {
 
       {/* Payment Modal */}
       <AppModal 
-        open={openPayment} 
+        open={openPayment && canManageBilling} 
         onClose={() => setOpenPayment(false)} 
         title="Record Payment" 
         size="md"
@@ -577,7 +589,7 @@ export default function Billing() {
 
       {/* Delete Confirmation */}
       <ConfirmDialog 
-        isOpen={!!deleteId} 
+        isOpen={!!deleteId && canManageBilling} 
         title="Delete Invoice" 
         message="Are you sure you want to delete this invoice? This action cannot be undone and will remove all associated payments." 
         onConfirm={onDelete} 

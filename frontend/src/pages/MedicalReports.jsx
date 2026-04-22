@@ -10,6 +10,8 @@ import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatusBadge from '../components/common/StatusBadge.jsx';
 import { FormField, ConfirmDialog } from '../components/common/UIStates.jsx';
+import { useAuth } from '../hooks/useAuth.js';
+import { hasPermission } from '../lib/permissions.js';
 
 const schema = z.object({
   patient: z.coerce.number().min(1, 'Patient is required'),
@@ -24,6 +26,8 @@ const schema = z.object({
 });
 
 export default function MedicalReports() {
+  const { user } = useAuth();
+  const canManageReports = hasPermission(user?.role, 'medicalReports.manage');
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -155,12 +159,14 @@ export default function MedicalReports() {
         title="Medical Reports"
         subtitle="Create and track structured clinical reports across consultations and diagnostics."
         actions={
-          <button
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" /> New Report
-          </button>
+          canManageReports ? (
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+            >
+              <Plus className="w-4 h-4" /> New Report
+            </button>
+          ) : null
         }
       />
 
@@ -240,18 +246,24 @@ export default function MedicalReports() {
                         >
                           <Download className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => openEdit(row)}
-                          className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => confirmDelete(row.id)}
-                          className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-medium transition-colors"
-                        >
-                          Delete
-                        </button>
+                        {canManageReports ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(row)}
+                              className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => confirmDelete(row.id)}
+                              className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-medium transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -263,7 +275,7 @@ export default function MedicalReports() {
       </div>
 
       <AppModal
-        open={open}
+        open={open && canManageReports}
         onClose={() => setOpen(false)}
         title={editing ? 'Update Medical Report' : 'New Medical Report'}
         size="lg"
@@ -300,8 +312,8 @@ export default function MedicalReports() {
               label="Patient"
               name="patient"
               type="select"
+              register={register}
               options={patients.map(p => ({ value: p.id, label: p.full_name }))}
-              {...register('patient')}
               error={errors.patient?.message}
               touched={!!errors.patient}
               required
@@ -310,8 +322,8 @@ export default function MedicalReports() {
               label="Doctor"
               name="doctor"
               type="select"
+              register={register}
               options={doctors.map(d => ({ value: d.id, label: d.full_name }))}
-              {...register('doctor')}
               error={errors.doctor?.message}
               touched={!!errors.doctor}
             />
@@ -322,6 +334,7 @@ export default function MedicalReports() {
               label="Report Type"
               name="report_type"
               type="select"
+              register={register}
               options={[
                 { value: 'consultation', label: 'Consultation' },
                 { value: 'lab', label: 'Lab Report' },
@@ -330,7 +343,6 @@ export default function MedicalReports() {
                 { value: 'surgery', label: 'Surgery Note' },
                 { value: 'follow_up', label: 'Follow Up' },
               ]}
-              {...register('report_type')}
               error={errors.report_type?.message}
               touched={!!errors.report_type}
             />
@@ -338,12 +350,12 @@ export default function MedicalReports() {
               label="Status"
               name="status"
               type="select"
+              register={register}
               options={[
                 { value: 'draft', label: 'Draft' },
                 { value: 'final', label: 'Final' },
                 { value: 'amended', label: 'Amended' },
               ]}
-              {...register('status')}
               error={errors.status?.message}
               touched={!!errors.status}
             />
@@ -351,8 +363,8 @@ export default function MedicalReports() {
               label="Related Appt (Optional)"
               name="appointment"
               type="select"
+              register={register}
               options={appointments.map(a => ({ value: a.id, label: `${a.appointment_date} - ${a.patient_name}` }))}
-              {...register('appointment')}
               error={errors.appointment?.message}
               touched={!!errors.appointment}
             />
@@ -361,7 +373,7 @@ export default function MedicalReports() {
           <FormField
             label="Report Title"
             name="title"
-            {...register('title')}
+            register={register}
             error={errors.title?.message}
             touched={!!errors.title}
             required
@@ -372,7 +384,7 @@ export default function MedicalReports() {
             name="summary"
             type="textarea"
             rows={2}
-            {...register('summary')}
+            register={register}
             error={errors.summary?.message}
             touched={!!errors.summary}
           />
@@ -382,7 +394,7 @@ export default function MedicalReports() {
             name="findings"
             type="textarea"
             rows={4}
-            {...register('findings')}
+            register={register}
             error={errors.findings?.message}
             touched={!!errors.findings}
           />
@@ -392,7 +404,7 @@ export default function MedicalReports() {
             name="recommendations"
             type="textarea"
             rows={3}
-            {...register('recommendations')}
+            register={register}
             error={errors.recommendations?.message}
             touched={!!errors.recommendations}
           />
@@ -400,7 +412,7 @@ export default function MedicalReports() {
       </AppModal>
 
       <ConfirmDialog
-        isOpen={!!deleteId}
+        isOpen={!!deleteId && canManageReports}
         title="Delete Medical Report"
         message="Are you sure you want to delete this report? This action cannot be undone."
         onConfirm={onDelete}

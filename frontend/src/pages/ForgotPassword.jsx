@@ -84,7 +84,8 @@ export default function ForgotPassword() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 label="Username"
-                {...register('username')}
+                name="username"
+                register={register}
                 error={errors.username?.message}
                 touched={touchedFields.username}
                 placeholder="Enter your username"
@@ -92,8 +93,9 @@ export default function ForgotPassword() {
 
               <FormField
                 label="Email"
+                name="email"
                 type="email"
-                {...register('email')}
+                register={register}
                 error={errors.email?.message}
                 touched={touchedFields.email}
                 placeholder="Enter your email address"
@@ -101,8 +103,9 @@ export default function ForgotPassword() {
 
               <FormField
                 label="New Password"
+                name="new_password"
                 type="password"
-                {...register('new_password')}
+                register={register}
                 error={errors.new_password?.message}
                 touched={touchedFields.new_password}
                 placeholder="Enter new password"

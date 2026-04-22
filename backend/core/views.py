@@ -10,18 +10,54 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 from django.db.models import Q, Sum, Count
 from django.http import FileResponse
+from django.conf import settings
+from django.utils.text import slugify
 from datetime import timedelta
 from django.utils import timezone
 from .pdf_utils import generate_invoice_pdf, generate_medical_report_pdf
 
 from .models import Doctor, Patient, Appointment, MedicalRecord, MedicalReport, Billing, BillingPayment, User
-from .permissions import RoleActionPermission, get_doctor_profile_for_user
+from .permissions import RoleActionPermission, get_doctor_profile_for_user, get_patient_profile_for_user
 from .serializers import (
     DoctorSerializer, PatientSerializer, AppointmentSerializer,
     MedicalRecordSerializer, MedicalReportSerializer,
     BillingSerializer, BillingPaymentSerializer, UserSerializer,
     RegisterSerializer, ChangePasswordSerializer, ForgotPasswordSerializer,
 )
+
+
+def build_auth_response(user, request):
+    refresh = RefreshToken.for_user(user)
+    return {
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+        'user': UserSerializer(user, context={'request': request}).data,
+    }
+
+
+def verify_google_credential(credential, client_id):
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests
+    except ImportError as exc:
+        raise RuntimeError('Google sign-in support is not installed on the backend.') from exc
+
+    request_adapter = requests.Request()
+    return id_token.verify_oauth2_token(credential, request_adapter, client_id)
+
+
+def generate_unique_username(email, given_name='', family_name=''):
+    local_part = (email or '').split('@')[0].strip()
+    base = slugify(local_part) or slugify(f'{given_name}-{family_name}') or 'google-user'
+    candidate = base[:150]
+    counter = 1
+
+    while User.objects.filter(username=candidate).exists():
+        suffix = f'-{counter}'
+        candidate = f'{base[:150 - len(suffix)]}{suffix}'
+        counter += 1
+
+    return candidate
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -56,13 +92,86 @@ def register(request):
     serializer = RegisterSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save()
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-            'user': UserSerializer(user, context={'request': request}).data,
-        }, status=status.HTTP_201_CREATED)
+        return Response(build_auth_response(user, request), status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def google_login(request):
+    client_id = getattr(settings, 'GOOGLE_OAUTH_CLIENT_ID', '')
+    if not client_id:
+        return Response(
+            {'detail': 'Google sign-in is not configured on the server.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    credential = request.data.get('credential')
+    if not credential:
+        return Response({'credential': 'Google credential is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        payload = verify_google_credential(credential, client_id)
+    except RuntimeError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except ValueError:
+        return Response({'detail': 'Invalid Google credential.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    email = (payload.get('email') or '').strip().lower()
+    if not email or not payload.get('email_verified'):
+        return Response(
+            {'detail': 'Google account email must be present and verified.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    sub = payload.get('sub')
+    if not sub:
+        return Response({'detail': 'Google account identifier is missing.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.filter(google_sub=sub).first()
+    if not user:
+        user = User.objects.filter(email__iexact=email).first()
+
+    if user and user.google_sub and user.google_sub != sub:
+        return Response(
+            {'detail': 'This email is already linked to a different Google account.'},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    if not user:
+        user = User(
+            username=generate_unique_username(
+                email=email,
+                given_name=payload.get('given_name', ''),
+                family_name=payload.get('family_name', ''),
+            ),
+            email=email,
+            first_name=payload.get('given_name', ''),
+            last_name=payload.get('family_name', ''),
+            role='reception',
+            google_sub=sub,
+        )
+        user.set_unusable_password()
+        user.save()
+    else:
+        user.email = email
+        user.google_sub = sub
+        if payload.get('given_name') and not user.first_name:
+            user.first_name = payload.get('given_name')
+        if payload.get('family_name') and not user.last_name:
+            user.last_name = payload.get('family_name')
+        user.save()
+
+    return Response(build_auth_response(user, request), status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def auth_config(request):
+    return Response({
+        'google_client_id': getattr(settings, 'GOOGLE_OAUTH_CLIENT_ID', ''),
+        'google_enabled': bool(getattr(settings, 'GOOGLE_OAUTH_CLIENT_ID', '')),
+    })
 
 
 @api_view(['POST'])
@@ -130,6 +239,7 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_map = {
         'admin': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
         'doctor': {'retrieve', 'update', 'partial_update'},
+        'patient': {'retrieve', 'update', 'partial_update'},
         'reception': {'retrieve', 'update', 'partial_update'},
     }
 
@@ -159,6 +269,7 @@ class PatientViewSet(viewsets.ModelViewSet):
     permission_map = {
         'admin': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
         'doctor': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
+        'patient': {'list', 'retrieve', 'update', 'partial_update'},
         'reception': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
     }
     filter_backends = [SearchFilter]
@@ -168,6 +279,12 @@ class PatientViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.role == 'admin' or user.role == 'reception':
             return Patient.objects.all()
+
+        if user.role == 'patient':
+            patient_profile = get_patient_profile_for_user(user, Patient)
+            if not patient_profile:
+                return Patient.objects.none()
+            return Patient.objects.filter(pk=patient_profile.pk)
 
         doctor_profile = get_doctor_profile_for_user(user, Doctor)
         if not doctor_profile:
@@ -186,6 +303,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     permission_map = {
         'admin': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
         'doctor': {'list', 'retrieve', 'update', 'partial_update'},
+        'patient': {'list', 'retrieve'},
         'reception': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
     }
     filter_backends = [DjangoFilterBackend, SearchFilter]
@@ -197,6 +315,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         base_qs = Appointment.objects.select_related('patient', 'doctor').all()
         if user.role in {'admin', 'reception'}:
             return base_qs
+
+        if user.role == 'patient':
+            patient_profile = get_patient_profile_for_user(user, Patient)
+            if not patient_profile:
+                return Appointment.objects.none()
+            return base_qs.filter(patient=patient_profile)
 
         doctor_profile = get_doctor_profile_for_user(user, Doctor)
         if not doctor_profile:
@@ -212,6 +336,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
     permission_map = {
         'admin': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
         'doctor': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
+        'patient': {'list', 'retrieve'},
         'reception': set(),
     }
     filter_backends = [DjangoFilterBackend, SearchFilter]
@@ -223,6 +348,12 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         base_qs = MedicalRecord.objects.select_related('patient', 'doctor').all()
         if user.role == 'admin':
             return base_qs
+
+        if user.role == 'patient':
+            patient_profile = get_patient_profile_for_user(user, Patient)
+            if not patient_profile:
+                return MedicalRecord.objects.none()
+            return base_qs.filter(patient=patient_profile)
 
         doctor_profile = get_doctor_profile_for_user(user, Doctor)
         if not doctor_profile:
@@ -247,6 +378,7 @@ class BillingViewSet(viewsets.ModelViewSet):
     permission_map = {
         'admin': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
         'doctor': {'list', 'retrieve'},
+        'patient': {'list', 'retrieve'},
         'reception': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
     }
     filter_backends = [DjangoFilterBackend, SearchFilter]
@@ -259,6 +391,12 @@ class BillingViewSet(viewsets.ModelViewSet):
 
         if user.role in {'admin', 'reception'}:
             return base_qs
+
+        if user.role == 'patient':
+            patient_profile = get_patient_profile_for_user(user, Patient)
+            if not patient_profile:
+                return Billing.objects.none()
+            return base_qs.filter(patient=patient_profile)
 
         doctor_profile = get_doctor_profile_for_user(user, Doctor)
         if not doctor_profile:
@@ -281,6 +419,7 @@ class MedicalReportViewSet(viewsets.ModelViewSet):
     permission_map = {
         'admin': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
         'doctor': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
+        'patient': {'list', 'retrieve'},
         'reception': {'list', 'retrieve'},
     }
     filter_backends = [DjangoFilterBackend, SearchFilter]
@@ -292,6 +431,12 @@ class MedicalReportViewSet(viewsets.ModelViewSet):
         base_qs = MedicalReport.objects.select_related('patient', 'doctor', 'appointment').all()
         if user.role in {'admin', 'reception'}:
             return base_qs
+
+        if user.role == 'patient':
+            patient_profile = get_patient_profile_for_user(user, Patient)
+            if not patient_profile:
+                return MedicalReport.objects.none()
+            return base_qs.filter(patient=patient_profile)
 
         doctor_profile = get_doctor_profile_for_user(user, Doctor)
         if not doctor_profile:
@@ -316,6 +461,7 @@ class BillingPaymentViewSet(viewsets.ModelViewSet):
     permission_map = {
         'admin': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
         'doctor': {'list', 'retrieve'},
+        'patient': {'list', 'retrieve'},
         'reception': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
     }
     filter_backends = [DjangoFilterBackend, SearchFilter]
@@ -327,6 +473,12 @@ class BillingPaymentViewSet(viewsets.ModelViewSet):
         base_qs = BillingPayment.objects.select_related('billing', 'billing__patient')
         if user.role in {'admin', 'reception'}:
             return base_qs
+
+        if user.role == 'patient':
+            patient_profile = get_patient_profile_for_user(user, Patient)
+            if not patient_profile:
+                return BillingPayment.objects.none()
+            return base_qs.filter(billing__patient=patient_profile)
 
         doctor_profile = get_doctor_profile_for_user(user, Doctor)
         if not doctor_profile:
@@ -434,8 +586,4 @@ def billing_dashboard_stats(request):
             'overdue_90': float(overdue_90),
         },
     })
-
-
-
-
 

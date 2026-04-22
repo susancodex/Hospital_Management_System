@@ -31,6 +31,15 @@ const ROLE_PERMISSIONS = {
     'billing.view',
     'profile.view',
   ]),
+  patient: new Set([
+    'dashboard.view',
+    'patients.view',
+    'appointments.view',
+    'medicalRecords.view',
+    'medicalReports.view',
+    'billing.view',
+    'profile.view',
+  ]),
   reception: new Set([
     'dashboard.view',
     'doctors.view',

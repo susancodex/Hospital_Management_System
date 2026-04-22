@@ -10,18 +10,20 @@ import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatusBadge from '../components/common/StatusBadge.jsx';
 import { FormField, ConfirmDialog } from '../components/common/UIStates.jsx';
+import { useAuth } from '../hooks/useAuth.js';
+import { hasPermission } from '../lib/permissions.js';
 
 const schema = z.object({
   patient: z.coerce.number().min(1, 'Patient is required'),
   doctor: z.coerce.number().optional(),
-  record_date: z.string().min(1, 'Date is required'),
   diagnosis: z.string().min(3, 'Diagnosis is required'),
   treatment: z.string().optional(),
   notes: z.string().optional(),
-  status: z.enum(['draft', 'final', 'amended']).default('draft'), // adding status if missing or defaulting
 });
 
 export default function MedicalRecords() {
+  const { user } = useAuth();
+  const canManageRecords = hasPermission(user?.role, 'medicalRecords.manage');
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -39,7 +41,7 @@ export default function MedicalRecords() {
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema),
-    defaultValues: { status: 'draft' }
+    defaultValues: { patient: '', doctor: '', diagnosis: '', treatment: '', notes: '' }
   });
 
   const load = async () => {
@@ -71,7 +73,7 @@ export default function MedicalRecords() {
 
   const openCreate = () => {
     setEditing(null);
-    reset({ patient: '', doctor: '', record_date: new Date().toISOString().split('T')[0], diagnosis: '', treatment: '', notes: '', status: 'draft' });
+    reset({ patient: '', doctor: '', diagnosis: '', treatment: '', notes: '' });
     setOpen(true);
   };
 
@@ -80,11 +82,9 @@ export default function MedicalRecords() {
     reset({
       patient: row.patient,
       doctor: row.doctor || '',
-      record_date: row.record_date,
       diagnosis: row.diagnosis,
       treatment: row.treatment || '',
       notes: row.notes || '',
-      status: row.status || 'draft'
     });
     setOpen(true);
   };
@@ -129,12 +129,14 @@ export default function MedicalRecords() {
         title="Medical Records"
         subtitle="Clinical timeline for diagnoses, treatment plans, and physician notes."
         actions={
-          <button
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Add Record
-          </button>
+          canManageRecords ? (
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add Record
+            </button>
+          ) : null
         }
       />
 
@@ -188,7 +190,7 @@ export default function MedicalRecords() {
                       {row.diagnosis}
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap">
-                      <StatusBadge value={row.status || 'draft'} />
+                      <StatusBadge value={row.is_signed ? 'final' : 'draft'} />
                     </td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2">
@@ -199,18 +201,24 @@ export default function MedicalRecords() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => openEdit(row)}
-                          className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => confirmDelete(row.id)}
-                          className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-medium transition-colors"
-                        >
-                          Delete
-                        </button>
+                        {canManageRecords ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(row)}
+                              className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => confirmDelete(row.id)}
+                              className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-medium transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -222,7 +230,7 @@ export default function MedicalRecords() {
       </div>
 
       <AppModal
-        open={open}
+        open={open && canManageRecords}
         onClose={() => setOpen(false)}
         title={editing ? 'Update Medical Record' : 'New Medical Record'}
         size="lg"
@@ -251,8 +259,8 @@ export default function MedicalRecords() {
               label="Patient"
               name="patient"
               type="select"
+              register={register}
               options={patients.map(p => ({ value: p.id, label: p.full_name }))}
-              {...register('patient')}
               error={errors.patient?.message}
               touched={!!errors.patient}
               required
@@ -261,34 +269,10 @@ export default function MedicalRecords() {
               label="Doctor"
               name="doctor"
               type="select"
+              register={register}
               options={doctors.map(d => ({ value: d.id, label: d.full_name }))}
-              {...register('doctor')}
               error={errors.doctor?.message}
               touched={!!errors.doctor}
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField
-              label="Date"
-              name="record_date"
-              type="date"
-              {...register('record_date')}
-              error={errors.record_date?.message}
-              touched={!!errors.record_date}
-              required
-            />
-            <FormField
-              label="Status"
-              name="status"
-              type="select"
-              options={[
-                { value: 'draft', label: 'Draft' },
-                { value: 'final', label: 'Final' },
-                { value: 'amended', label: 'Amended' }
-              ]}
-              {...register('status')}
-              error={errors.status?.message}
-              touched={!!errors.status}
             />
           </div>
           <FormField
@@ -296,7 +280,7 @@ export default function MedicalRecords() {
             name="diagnosis"
             type="textarea"
             rows={2}
-            {...register('diagnosis')}
+            register={register}
             error={errors.diagnosis?.message}
             touched={!!errors.diagnosis}
             required
@@ -306,7 +290,7 @@ export default function MedicalRecords() {
             name="treatment"
             type="textarea"
             rows={3}
-            {...register('treatment')}
+            register={register}
             error={errors.treatment?.message}
             touched={!!errors.treatment}
           />
@@ -315,7 +299,7 @@ export default function MedicalRecords() {
             name="notes"
             type="textarea"
             rows={3}
-            {...register('notes')}
+            register={register}
             error={errors.notes?.message}
             touched={!!errors.notes}
           />
@@ -341,8 +325,8 @@ export default function MedicalRecords() {
           <dl className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <dt className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Status</dt>
-                <dd><StatusBadge value={viewRecord.status || 'draft'} /></dd>
+                <dt className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Record State</dt>
+                <dd><StatusBadge value={viewRecord.is_signed ? 'final' : 'draft'} /></dd>
               </div>
               <div>
                 <dt className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Attending Physician</dt>
@@ -366,7 +350,7 @@ export default function MedicalRecords() {
       </AppModal>
 
       <ConfirmDialog
-        isOpen={!!deleteId}
+        isOpen={!!deleteId && canManageRecords}
         title="Delete Medical Record"
         message="Are you sure you want to delete this record? This action cannot be undone."
         onConfirm={onDelete}

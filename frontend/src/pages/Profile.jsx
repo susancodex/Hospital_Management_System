@@ -27,7 +27,7 @@ const passwordSchema = z.object({
 export default function Profile() {
   const user = useAuthStore((state) => state.user);
   const refreshProfile = useAuthStore((state) => state.refreshProfile);
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, setTheme } = useTheme();
   
   const [avatarFile, setAvatarFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -309,13 +309,15 @@ export default function Profile() {
                     </div>
                     <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
                       <button 
-                        onClick={() => !isDark && toggleTheme()}
+                        type="button"
+                        onClick={() => setTheme('light')}
                         className={`inline-flex items-center justify-center w-10 h-8 rounded-md transition-colors ${!isDark ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
                       >
                         <Sun className="w-4 h-4" />
                       </button>
                       <button 
-                        onClick={() => isDark && toggleTheme()}
+                        type="button"
+                        onClick={() => setTheme('dark')}
                         className={`inline-flex items-center justify-center w-10 h-8 rounded-md transition-colors ${isDark ? 'bg-slate-700 text-slate-100 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                       >
                         <Moon className="w-4 h-4" />
@@ -389,7 +391,7 @@ export default function Profile() {
                   </div>
                   
                   <div className="pt-2">
-                    <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm transition-colors">
+                    <button type="button" className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm transition-colors">
                       Sign out of all other sessions
                     </button>
                   </div>
@@ -472,7 +474,7 @@ export default function Profile() {
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 max-w-[200px] mx-auto">
               Our support team is available 24/7 to help with any technical issues.
             </p>
-            <button className="inline-flex items-center gap-2 h-8 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm transition-colors w-full justify-center">
+            <button type="button" className="inline-flex items-center gap-2 h-8 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm transition-colors w-full justify-center">
               Contact Support
             </button>
           </div>

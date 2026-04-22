@@ -256,15 +256,17 @@ export default function Doctors() {
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField 
               label="First Name" 
+              name="first_name"
+              register={register}
               required 
-              {...register('first_name')} 
               error={errors.first_name?.message} 
               touched={touchedFields.first_name}
             />
             <FormField 
               label="Last Name" 
+              name="last_name"
+              register={register}
               required 
-              {...register('last_name')} 
               error={errors.last_name?.message} 
               touched={touchedFields.last_name}
             />
@@ -272,16 +274,18 @@ export default function Doctors() {
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField 
               label="Email" 
+              name="email"
               type="email" 
+              register={register}
               required 
-              {...register('email')} 
               error={errors.email?.message} 
               touched={touchedFields.email}
             />
             <FormField 
               label="Phone" 
+              name="phone"
+              register={register}
               required 
-              {...register('phone')} 
               error={errors.phone?.message} 
               touched={touchedFields.phone}
             />
@@ -289,14 +293,16 @@ export default function Doctors() {
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField 
               label="Specialization" 
+              name="specialization"
+              register={register}
               required 
-              {...register('specialization')} 
               error={errors.specialization?.message} 
               touched={touchedFields.specialization}
             />
             <FormField 
               label="License Number" 
-              {...register('license_number')} 
+              name="license_number"
+              register={register}
               error={errors.license_number?.message} 
               touched={touchedFields.license_number}
             />
@@ -304,8 +310,9 @@ export default function Doctors() {
           <div>
             <FormField 
               label="Availability" 
+              name="is_available"
               type="select" 
-              {...register('is_available')} 
+              register={register}
               options={[
                 { value: true, label: 'Available' },
                 { value: false, label: 'Not available' },

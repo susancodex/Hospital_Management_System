@@ -297,15 +297,17 @@ export default function Patients() {
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField 
               label="First Name" 
+              name="first_name"
+              register={register}
               required 
-              {...register('first_name')} 
               error={errors.first_name?.message} 
               touched={touchedFields.first_name}
             />
             <FormField 
               label="Last Name" 
+              name="last_name"
+              register={register}
               required 
-              {...register('last_name')} 
               error={errors.last_name?.message} 
               touched={touchedFields.last_name}
             />
@@ -313,15 +315,17 @@ export default function Patients() {
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField 
               label="Email" 
+              name="email"
               type="email" 
-              {...register('email')} 
+              register={register}
               error={errors.email?.message} 
               touched={touchedFields.email}
             />
             <FormField 
               label="Phone" 
+              name="phone"
+              register={register}
               required 
-              {...register('phone')} 
               error={errors.phone?.message} 
               touched={touchedFields.phone}
             />
@@ -329,9 +333,10 @@ export default function Patients() {
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField 
               label="Gender" 
+              name="gender"
               type="select" 
+              register={register}
               required 
-              {...register('gender')} 
               error={errors.gender?.message} 
               touched={touchedFields.gender}
               options={[
@@ -342,17 +347,19 @@ export default function Patients() {
             />
             <FormField 
               label="Date of Birth" 
+              name="date_of_birth"
               type="date" 
-              {...register('date_of_birth')} 
+              register={register}
               error={errors.date_of_birth?.message} 
               touched={touchedFields.date_of_birth}
             />
           </div>
           <FormField 
             label="Address" 
+            name="address"
             type="textarea" 
             rows={3} 
-            {...register('address')} 
+            register={register}
             error={errors.address?.message} 
             touched={touchedFields.address}
           />

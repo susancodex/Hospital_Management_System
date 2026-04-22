@@ -10,6 +10,8 @@ import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatusBadge from '../components/common/StatusBadge.jsx';
 import { FormField, ConfirmDialog } from '../components/common/UIStates.jsx';
+import { useAuth } from '../hooks/useAuth.js';
+import { hasPermission } from '../lib/permissions.js';
 
 const schema = z.object({
   patient: z.coerce.number().min(1, 'Patient is required'),
@@ -21,6 +23,8 @@ const schema = z.object({
 });
 
 export default function Appointments() {
+  const { user } = useAuth();
+  const canManageAppointments = hasPermission(user?.role, 'appointments.manage');
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -145,12 +149,14 @@ export default function Appointments() {
         title="Appointments"
         subtitle="Manage consultations and schedules"
         actions={
-          <button
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" /> New Appointment
-          </button>
+          canManageAppointments ? (
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+            >
+              <Plus className="w-4 h-4" /> New Appointment
+            </button>
+          ) : null
         }
       />
 
@@ -245,18 +251,24 @@ export default function Appointments() {
                     </td>
                     <td className="px-5 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => openEdit(row)}
-                          className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => confirmDelete(row.id)}
-                          className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-medium transition-colors"
-                        >
-                          Delete
-                        </button>
+                        {canManageAppointments ? (
+                          <button
+                            type="button"
+                            onClick={() => openEdit(row)}
+                            className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
+                          >
+                            Edit
+                          </button>
+                        ) : null}
+                        {canManageAppointments ? (
+                          <button
+                            type="button"
+                            onClick={() => confirmDelete(row.id)}
+                            className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-medium transition-colors"
+                          >
+                            Delete
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -268,7 +280,7 @@ export default function Appointments() {
       </div>
 
       <AppModal
-        open={open}
+        open={open && canManageAppointments}
         onClose={() => setOpen(false)}
         title={editing ? 'Update Appointment' : 'New Appointment'}
         size="md"
@@ -297,9 +309,8 @@ export default function Appointments() {
               label="Patient"
               name="patient"
               type="select"
+              register={register}
               options={patients.map(p => ({ value: p.id, label: p.full_name }))}
-              value={register('patient').value}
-              {...register('patient')}
               error={errors.patient?.message}
               touched={!!errors.patient}
               required
@@ -308,9 +319,8 @@ export default function Appointments() {
               label="Doctor"
               name="doctor"
               type="select"
+              register={register}
               options={doctors.map(d => ({ value: d.id, label: d.full_name }))}
-              value={register('doctor').value}
-              {...register('doctor')}
               error={errors.doctor?.message}
               touched={!!errors.doctor}
               required
@@ -321,7 +331,7 @@ export default function Appointments() {
               label="Date"
               name="appointment_date"
               type="date"
-              {...register('appointment_date')}
+              register={register}
               error={errors.appointment_date?.message}
               touched={!!errors.appointment_date}
               required
@@ -330,7 +340,7 @@ export default function Appointments() {
               label="Time"
               name="appointment_time"
               type="time"
-              {...register('appointment_time')}
+              register={register}
               error={errors.appointment_time?.message}
               touched={!!errors.appointment_time}
             />
@@ -339,13 +349,13 @@ export default function Appointments() {
             label="Status"
             name="status"
             type="select"
+            register={register}
             options={[
               { value: 'scheduled', label: 'Scheduled' },
               { value: 'pending', label: 'Pending' },
               { value: 'completed', label: 'Completed' },
               { value: 'cancelled', label: 'Cancelled' },
             ]}
-            {...register('status')}
             error={errors.status?.message}
             touched={!!errors.status}
           />
@@ -355,7 +365,7 @@ export default function Appointments() {
             type="textarea"
             placeholder="Add any notes..."
             rows={3}
-            {...register('notes')}
+            register={register}
             error={errors.notes?.message}
             touched={!!errors.notes}
           />
@@ -363,7 +373,7 @@ export default function Appointments() {
       </AppModal>
 
       <ConfirmDialog
-        isOpen={!!deleteId}
+        isOpen={!!deleteId && canManageAppointments}
         title="Delete Appointment"
         message="Are you sure you want to delete this appointment? This action cannot be undone."
         onConfirm={onDelete}

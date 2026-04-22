@@ -23,6 +23,14 @@ const menuConfig = {
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
   ],
+  patient: [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
+    { label: 'My Record', path: '/patients', icon: Users, permission: 'patients.view' },
+    { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },
+    { label: 'Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
+    { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
+    { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
+  ],
   reception: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
     { label: 'Patients', path: '/patients', icon: Users, permission: 'patients.view' },

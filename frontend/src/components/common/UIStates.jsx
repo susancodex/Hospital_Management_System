@@ -53,8 +53,27 @@ export const FormError = ({ error }) => {
 
 export const FormField = ({
   label, name, type = 'text', value, error, touched, onChange, onBlur, placeholder,
-  required = false, options = null, rows = null, autoComplete,
+  required = false, options = null, rows = null, autoComplete, register,
 }) => {
+  const registration = typeof register === 'function' && name ? register(name) : null;
+  const mergedOnChange = (event) => {
+    registration?.onChange?.(event);
+    onChange?.(event);
+  };
+  const mergedOnBlur = (event) => {
+    registration?.onBlur?.(event);
+    onBlur?.(event);
+  };
+  const inputProps = {
+    ...(registration || {}),
+    name: registration?.name || name,
+    onChange: mergedOnChange,
+    onBlur: mergedOnBlur,
+  };
+  if (value !== undefined) {
+    inputProps.value = value;
+  }
+
   const baseClasses = `w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 transition-colors ${
     error && touched ? 'border-rose-400 dark:border-rose-700 focus:ring-rose-500/20 focus:border-rose-500' : ''
   }`;
@@ -69,11 +88,12 @@ export const FormField = ({
       )}
       {type === 'textarea' ? (
         <textarea
-          name={name} value={value || ''} onChange={onChange} onBlur={onBlur} placeholder={placeholder}
+          {...inputProps}
+          placeholder={placeholder}
           rows={rows || 3} className={`${baseClasses} ${sizing}`}
         />
       ) : type === 'select' ? (
-        <select name={name} value={value || ''} onChange={onChange} onBlur={onBlur} className={`${baseClasses} ${sizing}`}>
+        <select {...inputProps} className={`${baseClasses} ${sizing}`}>
           <option value="">Select {(label || name || '').toLowerCase()}…</option>
           {options?.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -81,8 +101,10 @@ export const FormField = ({
         </select>
       ) : (
         <input
-          type={type} name={name} value={value ?? ''} onChange={onChange} onBlur={onBlur}
-          placeholder={placeholder} autoComplete={autoComplete}
+          {...inputProps}
+          type={type}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
           className={`${baseClasses} ${sizing}`}
         />
       )}
