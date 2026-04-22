@@ -8,7 +8,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
-from django.db.models import Q, Sum, Count
+from django.db.models import Q, Sum, Count, F, ExpressionWrapper, DecimalField
 from django.http import FileResponse
 from datetime import timedelta
 from django.utils import timezone
@@ -400,15 +400,31 @@ def billing_dashboard_stats(request):
     ).order_by('payment_day')
     
     # Insurance pending
+    _balance_expr = ExpressionWrapper(F('amount') - F('paid_amount'), output_field=DecimalField())
     insurance_pending_count = Billing.objects.filter(status='insurance_pending').count()
-    insurance_pending_amount = Billing.objects.filter(status='insurance_pending').aggregate(Sum('balance_due'))['balance_due__sum'] or 0
+    insurance_pending_amount = (
+        Billing.objects.filter(status='insurance_pending')
+        .aggregate(total=Sum(_balance_expr))['total'] or 0
+    )
     
     # AR aging
     today = timezone.now().date()
-    current_due = Billing.objects.filter(due_date__lte=today, status__in=['unpaid', 'partial']).aggregate(Sum('balance_due'))['balance_due__sum'] or 0
-    overdue_30 = Billing.objects.filter(due_date__lt=today - timedelta(days=30), status__in=['unpaid', 'partial']).aggregate(Sum('balance_due'))['balance_due__sum'] or 0
-    overdue_60 = Billing.objects.filter(due_date__lt=today - timedelta(days=60), status__in=['unpaid', 'partial']).aggregate(Sum('balance_due'))['balance_due__sum'] or 0
-    overdue_90 = Billing.objects.filter(due_date__lt=today - timedelta(days=90), status__in=['unpaid', 'partial']).aggregate(Sum('balance_due'))['balance_due__sum'] or 0
+    current_due = (
+        Billing.objects.filter(due_date__lte=today, status__in=['unpaid', 'partial'])
+        .aggregate(total=Sum(_balance_expr))['total'] or 0
+    )
+    overdue_30 = (
+        Billing.objects.filter(due_date__lt=today - timedelta(days=30), status__in=['unpaid', 'partial'])
+        .aggregate(total=Sum(_balance_expr))['total'] or 0
+    )
+    overdue_60 = (
+        Billing.objects.filter(due_date__lt=today - timedelta(days=60), status__in=['unpaid', 'partial'])
+        .aggregate(total=Sum(_balance_expr))['total'] or 0
+    )
+    overdue_90 = (
+        Billing.objects.filter(due_date__lt=today - timedelta(days=90), status__in=['unpaid', 'partial'])
+        .aggregate(total=Sum(_balance_expr))['total'] or 0
+    )
     
     return Response({
         'total_billed': float(total_billed),
