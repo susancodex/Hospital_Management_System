@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { AlertTriangle, Search } from 'lucide-react';
 
 export const EmptyState = ({ icon: Icon = Search, title = 'No data yet', description = 'Try adjusting your search or filters.', action = null }) => (
@@ -51,14 +52,15 @@ export const FormError = ({ error }) => {
   return <p className="mt-1 text-xs text-rose-600 inline-flex items-center gap-1"><AlertTriangle size={12}/> {error}</p>;
 };
 
-export const FormField = ({
+export const FormField = forwardRef(function FormField({
   label, name, type = 'text', value, error, touched, onChange, onBlur, placeholder,
   required = false, options = null, rows = null, autoComplete,
-}) => {
+}, ref) {
   const baseClasses = `w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 transition-colors ${
     error && touched ? 'border-rose-400 dark:border-rose-700 focus:ring-rose-500/20 focus:border-rose-500' : ''
   }`;
   const sizing = type === 'textarea' ? 'py-2.5' : 'h-10';
+  const valueProps = value !== undefined ? { value } : {};
 
   return (
     <div>
@@ -69,11 +71,11 @@ export const FormField = ({
       )}
       {type === 'textarea' ? (
         <textarea
-          name={name} value={value || ''} onChange={onChange} onBlur={onBlur} placeholder={placeholder}
+          ref={ref} name={name} {...valueProps} onChange={onChange} onBlur={onBlur} placeholder={placeholder}
           rows={rows || 3} className={`${baseClasses} ${sizing}`}
         />
       ) : type === 'select' ? (
-        <select name={name} value={value || ''} onChange={onChange} onBlur={onBlur} className={`${baseClasses} ${sizing}`}>
+        <select ref={ref} name={name} {...valueProps} onChange={onChange} onBlur={onBlur} className={`${baseClasses} ${sizing}`}>
           <option value="">Select {(label || name || '').toLowerCase()}…</option>
           {options?.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -81,7 +83,7 @@ export const FormField = ({
         </select>
       ) : (
         <input
-          type={type} name={name} value={value ?? ''} onChange={onChange} onBlur={onBlur}
+          ref={ref} type={type} name={name} {...valueProps} onChange={onChange} onBlur={onBlur}
           placeholder={placeholder} autoComplete={autoComplete}
           className={`${baseClasses} ${sizing}`}
         />
@@ -89,7 +91,7 @@ export const FormField = ({
       {error && touched && <FormError error={error} />}
     </div>
   );
-};
+});
 
 export const ConfirmDialog = ({ isOpen, title, message, onConfirm, onCancel, isLoading = false, isDangerous = false }) => {
   if (!isOpen) return null;
