@@ -8,13 +8,18 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
-from django.db.models import Q
+from django.db.models import Q, Sum, Count
+from django.http import FileResponse
+from datetime import timedelta
+from django.utils import timezone
+from .pdf_utils import generate_invoice_pdf, generate_medical_report_pdf
 
-from .models import Doctor, Patient, Appointment, MedicalRecord, Billing, User
+from .models import Doctor, Patient, Appointment, MedicalRecord, MedicalReport, Billing, BillingPayment, User
 from .permissions import RoleActionPermission, get_doctor_profile_for_user
 from .serializers import (
     DoctorSerializer, PatientSerializer, AppointmentSerializer,
-    MedicalRecordSerializer, BillingSerializer, UserSerializer,
+    MedicalRecordSerializer, MedicalReportSerializer,
+    BillingSerializer, BillingPaymentSerializer, UserSerializer,
     RegisterSerializer, ChangePasswordSerializer, ForgotPasswordSerializer,
 )
 
@@ -236,20 +241,199 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
 
 
 class BillingViewSet(viewsets.ModelViewSet):
-    queryset = Billing.objects.select_related('patient').all()
+    queryset = Billing.objects.select_related('patient', 'appointment', 'appointment__doctor').all()
     serializer_class = BillingSerializer
     permission_classes = [IsAuthenticated, RoleActionPermission]
     permission_map = {
         'admin': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
         'doctor': {'list', 'retrieve'},
-        'reception': set(),
+        'reception': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
     }
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['status', 'patient']
     search_fields = ['patient__first_name', 'patient__last_name', 'description', 'status']
 
+    def get_queryset(self):
+        user = self.request.user
+        base_qs = Billing.objects.select_related('patient', 'appointment', 'appointment__doctor').all()
+
+        if user.role in {'admin', 'reception'}:
+            return base_qs
+
+        doctor_profile = get_doctor_profile_for_user(user, Doctor)
+        if not doctor_profile:
+            return Billing.objects.none()
+
+        return base_qs.filter(
+            Q(appointment__doctor=doctor_profile) |
+            Q(patient__appointments__doctor=doctor_profile) |
+            Q(patient__medical_records__doctor=doctor_profile)
+        ).distinct()
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
+class MedicalReportViewSet(viewsets.ModelViewSet):
+    queryset = MedicalReport.objects.select_related('patient', 'doctor', 'appointment').all()
+    serializer_class = MedicalReportSerializer
+    permission_classes = [IsAuthenticated, RoleActionPermission]
+    permission_map = {
+        'admin': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
+        'doctor': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
+        'reception': {'list', 'retrieve'},
+    }
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['patient', 'doctor', 'report_type', 'status']
+    search_fields = ['title', 'summary', 'findings', 'recommendations', 'patient__first_name', 'patient__last_name']
+
+    def get_queryset(self):
+        user = self.request.user
+        base_qs = MedicalReport.objects.select_related('patient', 'doctor', 'appointment').all()
+        if user.role in {'admin', 'reception'}:
+            return base_qs
+
+        doctor_profile = get_doctor_profile_for_user(user, Doctor)
+        if not doctor_profile:
+            return MedicalReport.objects.none()
+
+        return base_qs.filter(doctor=doctor_profile)
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.role != 'doctor':
+            serializer.save(created_by=user)
+            return
+
+        doctor_profile = get_doctor_profile_for_user(user, Doctor)
+        serializer.save(created_by=user, doctor=doctor_profile)
+
+
+class BillingPaymentViewSet(viewsets.ModelViewSet):
+    queryset = BillingPayment.objects.select_related('billing', 'billing__patient').all()
+    serializer_class = BillingPaymentSerializer
+    permission_classes = [IsAuthenticated, RoleActionPermission]
+    permission_map = {
+        'admin': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
+        'doctor': {'list', 'retrieve'},
+        'reception': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
+    }
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['billing', 'payment_method']
+    search_fields = ['billing__patient__first_name', 'billing__patient__last_name', 'reference_number', 'notes']
+
+    def get_queryset(self):
+        user = self.request.user
+        base_qs = BillingPayment.objects.select_related('billing', 'billing__patient')
+        if user.role in {'admin', 'reception'}:
+            return base_qs
+
+        doctor_profile = get_doctor_profile_for_user(user, Doctor)
+        if not doctor_profile:
+            return BillingPayment.objects.none()
+
+        return base_qs.filter(
+            Q(billing__appointment__doctor=doctor_profile) |
+            Q(billing__patient__appointments__doctor=doctor_profile)
+        ).distinct()
+
+    def perform_create(self, serializer):
+        serializer.save(received_by=self.request.user)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def download_invoice_pdf(request, billing_id):
+    """Download invoice as PDF."""
+    try:
+        billing = Billing.objects.get(id=billing_id)
+        pdf_buffer = generate_invoice_pdf(billing)
+        return FileResponse(
+            pdf_buffer,
+            as_attachment=True,
+            filename=f'invoice_{billing.id}.pdf',
+            content_type='application/pdf',
+        )
+    except Billing.DoesNotExist:
+        return Response({'detail': 'Bill not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def download_medical_report_pdf(request, report_id):
+    """Download medical report as PDF."""
+    try:
+        report = MedicalReport.objects.get(id=report_id)
+        pdf_buffer = generate_medical_report_pdf(report)
+        return FileResponse(
+            pdf_buffer,
+            as_attachment=True,
+            filename=f'medical_report_{report.id}.pdf',
+            content_type='application/pdf',
+        )
+    except MedicalReport.DoesNotExist:
+        return Response({'detail': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def billing_dashboard_stats(request):
+    """Get billing dashboard statistics and trends."""
+    # Overall stats
+    total_billed = Billing.objects.aggregate(Sum('amount'))['amount__sum'] or 0
+    total_collected = Billing.objects.aggregate(Sum('paid_amount'))['paid_amount__sum'] or 0
+    outstanding_total = Billing.objects.aggregate(Sum('amount'))['amount__sum'] or 0
+    outstanding_total = outstanding_total - total_collected if outstanding_total else 0
+    
+    # Count by status
+    status_counts = Billing.objects.values('status').annotate(count=Count('id'), amount=Sum('amount'))
+    
+    # Last 30 days collections
+    thirty_days_ago = timezone.now() - timedelta(days=30)
+    daily_collections = BillingPayment.objects.filter(
+        payment_date__gte=thirty_days_ago
+    ).extra(
+        select={'payment_day': 'DATE(payment_date)'}
+    ).values('payment_day').annotate(
+        total=Sum('amount'),
+        count=Count('id')
+    ).order_by('payment_day')
+    
+    # Insurance pending
+    insurance_pending_count = Billing.objects.filter(status='insurance_pending').count()
+    insurance_pending_amount = Billing.objects.filter(status='insurance_pending').aggregate(Sum('balance_due'))['balance_due__sum'] or 0
+    
+    # AR aging
+    today = timezone.now().date()
+    current_due = Billing.objects.filter(due_date__lte=today, status__in=['unpaid', 'partial']).aggregate(Sum('balance_due'))['balance_due__sum'] or 0
+    overdue_30 = Billing.objects.filter(due_date__lt=today - timedelta(days=30), status__in=['unpaid', 'partial']).aggregate(Sum('balance_due'))['balance_due__sum'] or 0
+    overdue_60 = Billing.objects.filter(due_date__lt=today - timedelta(days=60), status__in=['unpaid', 'partial']).aggregate(Sum('balance_due'))['balance_due__sum'] or 0
+    overdue_90 = Billing.objects.filter(due_date__lt=today - timedelta(days=90), status__in=['unpaid', 'partial']).aggregate(Sum('balance_due'))['balance_due__sum'] or 0
+    
+    return Response({
+        'total_billed': float(total_billed),
+        'total_collected': float(total_collected),
+        'total_outstanding': float(outstanding_total),
+        'status_breakdown': list(status_counts),
+        'insurance_pending': {
+            'count': insurance_pending_count,
+            'amount': float(insurance_pending_amount),
+        },
+        'daily_collections': [
+            {
+                'date': str(item['payment_day']),
+                'amount': float(item['total']),
+                'count': item['count'],
+            }
+            for item in daily_collections
+        ],
+        'ar_aging': {
+            'current': float(current_due),
+            'overdue_30': float(overdue_30),
+            'overdue_60': float(overdue_60),
+            'overdue_90': float(overdue_90),
+        },
+    })
 
 
 

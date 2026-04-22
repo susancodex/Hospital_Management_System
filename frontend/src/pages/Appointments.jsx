@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { appointmentsAPI, doctorsAPI, patientsAPI } from '../api/services.js';
 import AppModal from '../components/common/AppModal.jsx';
 import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx';
@@ -24,6 +25,7 @@ const fadeIn = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } }
 const stagger = { animate: { transition: { staggerChildren: 0.05 } } };
 
 export default function Appointments() {
+  const { isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -66,58 +68,58 @@ export default function Appointments() {
   return (
     <motion.div className="space-y-6" initial="initial" animate="animate" variants={stagger}>
       <PageHeader title="Appointments" subtitle="Manage consultations and schedules" icon={CalendarDays} actions={
-        <motion.button onClick={openCreate} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+        <motion.button onClick={openCreate} className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all ${isDark ? 'hover:shadow-blue-900/50' : 'hover:shadow-blue-200'}`} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Plus size={16} /> New Appointment
         </motion.button>
       } />
 
-      <motion.div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm" variants={fadeIn}>
-        <div className="flex items-center gap-2"><Filter size={16} className="text-slate-400" /><span className="text-sm font-medium text-slate-600">Filters:</span></div>
-        <motion.select value={filterPatient} onChange={(e) => setFilterPatient(e.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" whileFocus={{ scale: 1.02 }}>
+      <motion.div className={`flex flex-wrap items-center gap-3 rounded-2xl border p-4 shadow-sm transition-colors ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`} variants={fadeIn}>
+        <div className="flex items-center gap-2"><Filter size={16} className={isDark ? 'text-slate-500' : 'text-slate-400'} /><span className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>Filters:</span></div>
+        <motion.select value={filterPatient} onChange={(e) => setFilterPatient(e.target.value)} className={`rounded-xl border px-3 py-2 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`} whileFocus={{ scale: 1.02 }}>
           <option value="">All patients</option>
           {patients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
         </motion.select>
-        <motion.select value={filterDoctor} onChange={(e) => setFilterDoctor(e.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" whileFocus={{ scale: 1.02 }}>
+        <motion.select value={filterDoctor} onChange={(e) => setFilterDoctor(e.target.value)} className={`rounded-xl border px-3 py-2 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`} whileFocus={{ scale: 1.02 }}>
           <option value="">All doctors</option>
           {doctors.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}
         </motion.select>
-        <motion.button onClick={load} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>Apply</motion.button>
-        {(filterPatient || filterDoctor) && <motion.button onClick={() => { setFilterPatient(''); setFilterDoctor(''); }} className="text-sm text-blue-600 hover:underline" whileHover={{ scale: 1.05 }}>Clear</motion.button>}
+        <motion.button onClick={load} className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${isDark ? 'bg-slate-700 text-slate-100 hover:bg-slate-600' : 'bg-slate-900 text-white hover:bg-slate-800'}`} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>Apply</motion.button>
+        {(filterPatient || filterDoctor) && <motion.button onClick={() => { setFilterPatient(''); setFilterDoctor(''); }} className={`text-sm transition-colors ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`} whileHover={{ scale: 1.05 }}>Clear</motion.button>}
       </motion.div>
 
-      {loading ? <TableSkeleton /> : rows.length === 0 ? <EmptyState title="No appointments" description="Create new appointments" /> : (
-        <motion.div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden" variants={fadeIn}>
+      {loading ? <TableSkeleton isDark={isDark} /> : rows.length === 0 ? <EmptyState isDark={isDark} /> : (
+        <motion.div className={`rounded-2xl border shadow-sm overflow-hidden transition-colors ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200/80 bg-white'}`} variants={fadeIn}>
           <AnimatePresence>
             <table className="w-full min-w-[900px] text-left text-sm">
               <thead>
-                <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
-                  <th className="px-5 py-4 text-xs font-medium text-slate-500">Patient</th>
-                  <th className="px-5 py-4 text-xs font-medium text-slate-500">Doctor</th>
-                  <th className="px-5 py-4 text-xs font-medium text-slate-500">Date & Time</th>
-                  <th className="px-5 py-4 text-xs font-medium text-slate-500">Status</th>
-                  <th className="px-5 py-4 text-xs font-medium text-slate-500">Actions</th>
+                <tr className={`border-b transition-colors ${isDark ? 'border-slate-700 bg-slate-700/50' : 'border-slate-200 bg-gradient-to-r from-slate-50 to-white'}`}>
+                  <th className={`px-5 py-4 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Patient</th>
+                  <th className={`px-5 py-4 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Doctor</th>
+                  <th className={`px-5 py-4 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Date & Time</th>
+                  <th className={`px-5 py-4 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Status</th>
+                  <th className={`px-5 py-4 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, idx) => (
-                  <motion.tr key={row.id} className="border-b border-slate-100 transition hover:bg-slate-50/50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ delay: idx * 0.03 }} whileHover={{ x: 4 }}>
+                  <motion.tr key={row.id} className={`border-b transition-colors ${isDark ? 'border-slate-700 hover:bg-slate-700/30' : 'border-slate-100 hover:bg-slate-50/50'}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ delay: idx * 0.03 }} whileHover={{ x: 4 }}>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <motion.div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-sm font-bold text-emerald-600" whileHover={{ rotate: 5 }}>
+                        <motion.div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-sm font-bold transition-colors ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-emerald-100 text-emerald-600'}`} whileHover={{ rotate: 5 }}>
                           {row.patient_name?.charAt(0)}
                         </motion.div>
-                        <span className="font-medium text-slate-900">{row.patient_name}</span>
+                        <span className={`font-medium ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{row.patient_name}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-slate-600">{row.doctor_name}</td>
+                    <td className={`px-5 py-4 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{row.doctor_name}</td>
                     <td className="px-5 py-4">
-                      <div className="flex items-center gap-2 text-slate-600"><Clock size={14} className="text-slate-400" /><span>{row.appointment_date}</span><span className="text-slate-400">|</span><span>{row.appointment_time || 'N/A'}</span></div>
+                      <div className={`flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}><Clock size={14} className={isDark ? 'text-slate-500' : 'text-slate-400'} /><span>{row.appointment_date}</span><span className={isDark ? 'text-slate-600' : 'text-slate-400'}>|</span><span>{row.appointment_time || 'N/A'}</span></div>
                     </td>
                     <td className="px-5 py-4"><StatusBadge value={row.status} /></td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
-                        <motion.button onClick={() => openEdit(row)} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600" whileHover={{ scale: 1.1 }}>Edit</motion.button>
-                        <motion.button onClick={() => onDelete(row.id)} className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600" whileHover={{ scale: 1.1 }}>Delete</motion.button>
+                        <motion.button onClick={() => openEdit(row)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`} whileHover={{ scale: 1.1 }}>Edit</motion.button>
+                        <motion.button onClick={() => onDelete(row.id)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${isDark ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50' : 'bg-red-50 text-red-600 hover:bg-red-100'}`} whileHover={{ scale: 1.1 }}>Delete</motion.button>
                       </div>
                     </td>
                   </motion.tr>
@@ -131,16 +133,47 @@ export default function Appointments() {
       <AppModal open={open} onClose={() => setOpen(false)} title={editing ? 'Update Appointment' : 'Create Appointment'}>
         <form onSubmit={handleSubmit(onSubmit)} className="grid gap-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div><label className="mb-1.5 block text-xs font-medium text-slate-600">Patient *</label><select {...register('patient')} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"><option value="">Select patient</option>{patients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</select></div>
-            <div><label className="mb-1.5 block text-xs font-medium text-slate-600">Doctor *</label><select {...register('doctor')} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"><option value="">Select doctor</option>{doctors.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}</select></div>
+            <div>
+              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Patient *</label>
+              <select {...register('patient')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`}>
+                <option value="">Select patient</option>
+                {patients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Doctor *</label>
+              <select {...register('doctor')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`}>
+                <option value="">Select doctor</option>
+                {doctors.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}
+              </select>
+            </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div><label className="mb-1.5 block text-xs font-medium text-slate-600">Date *</label><input type="date" {...register('appointment_date')} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm" /></div>
-            <div><label className="mb-1.5 block text-xs font-medium text-slate-600">Time</label><input type="time" {...register('appointment_time')} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm" /></div>
+            <div>
+              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Date *</label>
+              <input type="date" {...register('appointment_date')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`} />
+            </div>
+            <div>
+              <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Time</label>
+              <input type="time" {...register('appointment_time')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`} />
+            </div>
           </div>
-          <div><label className="mb-1.5 block text-xs font-medium text-slate-600">Status</label><select {...register('status')} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="pending">Pending</option><option value="cancelled">Cancelled</option></select></div>
-          <div><label className="mb-1.5 block text-xs font-medium text-slate-600">Notes</label><textarea {...register('notes')} rows={3} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm" placeholder="Add notes..." /></div>
-          <motion.button disabled={isSubmitting} className="mt-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg" whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>{editing ? 'Update Appointment' : 'Create Appointment'}</motion.button>
+          <div>
+            <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Status</label>
+            <select {...register('status')} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-900'}`}>
+              <option value="scheduled">Scheduled</option>
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label className={`mb-1.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Notes</label>
+            <textarea {...register('notes')} rows={3} className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-slate-600 bg-slate-700 text-slate-100 placeholder:text-slate-500' : 'border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400'}`} placeholder="Add notes..." />
+          </div>
+          <motion.button disabled={isSubmitting} className="mt-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-lg" whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+            {editing ? 'Update Appointment' : 'Create Appointment'}
+          </motion.button>
         </form>
       </AppModal>
     </motion.div>

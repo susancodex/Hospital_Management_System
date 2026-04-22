@@ -4,9 +4,11 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     UserViewSet, DoctorViewSet, PatientViewSet,
-    AppointmentViewSet, MedicalRecordViewSet, BillingViewSet,
+    AppointmentViewSet, MedicalRecordViewSet, MedicalReportViewSet,
+    BillingViewSet, BillingPaymentViewSet,
     CustomTokenObtainPairView, current_user, register,
     forgot_password, change_password, profile,
+    download_invoice_pdf, download_medical_report_pdf, billing_dashboard_stats,
 )
 
 router = DefaultRouter()
@@ -15,7 +17,9 @@ router.register('doctors', DoctorViewSet)
 router.register('patients', PatientViewSet)
 router.register('appointments', AppointmentViewSet)
 router.register('medical-records', MedicalRecordViewSet)
+router.register('medical-reports', MedicalReportViewSet)
 router.register('billing', BillingViewSet)
+router.register('billing-payments', BillingPaymentViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -26,6 +30,9 @@ urlpatterns = [
     path('change-password/', change_password, name='change_password'),
     path('profile/', profile, name='profile'),
     path('users/me/', current_user, name='current_user'),
+    path('billing/<int:billing_id>/download-invoice/', download_invoice_pdf, name='download_invoice'),
+    path('medical-reports/<int:report_id>/download-report/', download_medical_report_pdf, name='download_report'),
+    path('billing/dashboard/stats/', billing_dashboard_stats, name='billing_dashboard_stats'),
 ]
 
 

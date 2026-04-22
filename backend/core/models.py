@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Sum
 
 
 class User(AbstractUser):
@@ -212,7 +213,11 @@ class Billing(models.Model):
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='bills')
     appointment = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='unpaid')
+    due_date = models.DateField(null=True, blank=True)
+    insurance_provider = models.CharField(max_length=120, blank=True, default='')
+    insurance_claim_number = models.CharField(max_length=100, blank=True, default='')
     description = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -220,3 +225,83 @@ class Billing(models.Model):
 
     def __str__(self):
         return f"Bill #{self.id} for {self.patient} - ${self.amount}"
+
+    @property
+    def balance_due(self):
+        return max((self.amount or 0) - (self.paid_amount or 0), 0)
+
+    def update_payment_totals(self):
+        paid_total = self.payments.aggregate(total=Sum('amount')).get('total') or 0
+        self.paid_amount = paid_total
+
+        if self.paid_amount >= self.amount:
+            self.status = 'paid'
+        elif self.paid_amount > 0:
+            self.status = 'partial'
+        elif self.status not in {'insurance_pending', 'written_off'}:
+            self.status = 'unpaid'
+
+        self.save(update_fields=['paid_amount', 'status', 'updated_at'])
+
+
+class MedicalReport(models.Model):
+    REPORT_TYPE_CHOICES = [
+        ('consultation', 'Consultation'),
+        ('lab', 'Lab Report'),
+        ('radiology', 'Radiology'),
+        ('discharge', 'Discharge Summary'),
+        ('surgery', 'Surgery Note'),
+        ('follow_up', 'Follow Up'),
+    ]
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('final', 'Final'),
+        ('amended', 'Amended'),
+    ]
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='medical_reports')
+    doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True, related_name='medical_reports')
+    appointment = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True, blank=True, related_name='medical_reports')
+    report_type = models.CharField(max_length=20, choices=REPORT_TYPE_CHOICES, default='consultation')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    title = models.CharField(max_length=200)
+    summary = models.TextField(blank=True, default='')
+    findings = models.TextField(blank=True, default='')
+    recommendations = models.TextField(blank=True, default='')
+    report_date = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_medical_reports')
+
+    def __str__(self):
+        return f"{self.title} | {self.patient}"
+
+
+class BillingPayment(models.Model):
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('card', 'Card'),
+        ('bank', 'Bank Transfer'),
+        ('upi', 'UPI'),
+        ('insurance', 'Insurance'),
+    ]
+
+    billing = models.ForeignKey(Billing, on_delete=models.CASCADE, related_name='payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='cash')
+    reference_number = models.CharField(max_length=100, blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    payment_date = models.DateTimeField(auto_now_add=True)
+    received_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='received_payments')
+
+    def __str__(self):
+        return f"Payment #{self.id} for Bill #{self.billing_id}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.billing.update_payment_totals()
+
+    def delete(self, *args, **kwargs):
+        billing = self.billing
+        super().delete(*args, **kwargs)
+        billing.update_payment_totals()

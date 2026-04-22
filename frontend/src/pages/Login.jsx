@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { useAuthStore } from '../store/authStore.js';
+import { useTheme } from '../context/ThemeContext.jsx';
 
 const schema = z.object({
   username: z.string().min(3, 'Username is required'),
@@ -13,6 +14,7 @@ const schema = z.object({
 
 export default function Login() {
   const navigate = useNavigate();
+  const { isDark } = useTheme();
   const login = useAuthStore((state) => state.login);
   const loading = useAuthStore((state) => state.loading);
 
@@ -46,28 +48,40 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-10">
-      <div className="mx-auto grid max-w-5xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl md:grid-cols-2">
+    <div className={`min-h-screen px-4 py-10 transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
+      <div className={`mx-auto grid max-w-5xl overflow-hidden rounded-3xl shadow-xl md:grid-cols-2 border transition-colors duration-300 ${
+        isDark
+          ? 'border-slate-700 bg-slate-900'
+          : 'border-slate-200 bg-white'
+      }`}>
         <div className="hidden bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#2563eb] p-8 text-white md:block">
           <p className="text-xs uppercase tracking-[0.2em] text-blue-100">AetherCare HMS</p>
           <h1 className="font-heading mt-4 text-4xl font-semibold">Operational clarity for every hospital team.</h1>
           <p className="mt-4 text-sm text-slate-100/80">Manage patients, doctors, records, appointments, and billing from one secure control plane.</p>
         </div>
 
-        <div className="p-6 md:p-8">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Sign in</p>
-          <h2 className="font-heading mt-1 text-2xl font-semibold text-slate-900">Welcome back</h2>
+        <div className={`p-6 md:p-8 transition-colors duration-300 ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
+          <p className={`text-xs uppercase tracking-[0.16em] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Sign in</p>
+          <h2 className={`font-heading mt-1 text-2xl font-semibold transition-colors duration-300 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Welcome back</h2>
 
           <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Username</label>
-              <input {...register('username')} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none ring-blue-500/40 transition focus:ring" />
+              <label className={`mb-1 block text-sm font-medium transition-colors duration-300 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>Username</label>
+              <input {...register('username')} className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none ring-blue-500/40 transition ${
+                isDark
+                  ? 'border-slate-700 bg-slate-800 text-slate-100 focus:ring'
+                  : 'border-slate-200 bg-white text-slate-900 focus:ring'
+              }`} />
               {errors.username && <p className="mt-1 text-xs text-red-500">{errors.username.message}</p>}
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-              <input type="password" {...register('password')} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none ring-blue-500/40 transition focus:ring" />
+              <label className={`mb-1 block text-sm font-medium transition-colors duration-300 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>Password</label>
+              <input type="password" {...register('password')} className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none ring-blue-500/40 transition ${
+                isDark
+                  ? 'border-slate-700 bg-slate-800 text-slate-100 focus:ring'
+                  : 'border-slate-200 bg-white text-slate-900 focus:ring'
+              }`} />
               {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
             </div>
 
@@ -77,9 +91,9 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <Link to="/forgot-password" className="text-blue-700 hover:underline">Forgot password?</Link>
-            <Link to="/register" className="text-slate-600 hover:text-slate-900">Create account</Link>
+          <div className={`mt-4 flex items-center justify-between text-sm transition-colors duration-300 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+            <Link to="/forgot-password" className={`${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-700 hover:underline'}`}>Forgot password?</Link>
+            <Link to="/register" className={`${isDark ? 'text-slate-300 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'}`}>Create account</Link>
           </div>
         </div>
       </div>

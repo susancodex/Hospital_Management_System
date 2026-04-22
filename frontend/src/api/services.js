@@ -133,3 +133,25 @@ export const billingAPI = {
   update: (id, data) => apiClient.put(`/billing/${id}/`, data),
   delete: (id) => apiClient.delete(`/billing/${id}/`),
 };
+
+export const medicalReportsAPI = {
+  list: async (params) => {
+    const response = await apiClient.get(`/medical-reports/${toQueryParams(params)}`);
+    return { ...response, items: unwrapList(response) };
+  },
+  create: (data) => apiClient.post('/medical-reports/', data),
+  retrieve: (id) => apiClient.get(`/medical-reports/${id}/`),
+  update: (id, data) => apiClient.put(`/medical-reports/${id}/`, data),
+  delete: (id) => apiClient.delete(`/medical-reports/${id}/`),
+};
+
+export const billingPaymentsAPI = {
+  list: async (params) => {
+    const response = await apiClient.get(`/billing-payments/${toQueryParams(params)}`);
+    return { ...response, items: unwrapList(response) };
+  },
+  create: (data) => apiClient.post('/billing-payments/', data),
+  retrieve: (id) => apiClient.get(`/billing-payments/${id}/`),
+  update: (id, data) => apiClient.put(`/billing-payments/${id}/`, data),
+  delete: (id) => apiClient.delete(`/billing-payments/${id}/`),
+};
