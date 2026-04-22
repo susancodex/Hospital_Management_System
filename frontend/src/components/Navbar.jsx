@@ -77,18 +77,18 @@ export default function Navbar() {
   const roleLabels = { admin: 'Administrator', doctor: 'Doctor', reception: 'Receptionist' };
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/95 backdrop-blur-xl shadow-sm dark:shadow-lg transition-colors duration-300">
-      <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3 md:px-6 lg:px-8">
-        <button onClick={openMobileSidebar} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-700 lg:hidden">
+    <nav className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-sm dark:shadow-lg transition-colors duration-300">
+      <div className="mx-auto flex max-w-[1600px] items-center gap-2 sm:gap-3 px-3 py-2.5 sm:px-4 sm:py-3 md:px-6 lg:px-8">
+        <button onClick={openMobileSidebar} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-700 lg:hidden">
           <Menu size={18} />
         </button>
 
-        <div className="min-w-[180px]">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-blue-500">AetherCare</p>
-          <h1 className="font-heading text-lg font-bold text-slate-900 dark:text-slate-100">{pageTitle}</h1>
+        <div className="min-w-0 flex-shrink">
+          <p className="hidden sm:block text-[10px] uppercase tracking-[0.2em] text-blue-500">AetherCare</p>
+          <h1 className="font-heading text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">{pageTitle}</h1>
         </div>
 
-        <div className="ml-4 flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 dark:from-slate-800 to-slate-800 dark:to-slate-900 px-4 py-2 text-white">
+        <div className="ml-2 hidden xl:flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 dark:from-slate-800 to-slate-800 dark:to-slate-900 px-4 py-2 text-white">
           <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3 }}>
             <span className="text-xs font-medium text-slate-400">Welcome back,</span>
             <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export default function Navbar() {
           </motion.div>
         </div>
 
-        <div className="relative ml-auto max-w-xl flex-1" ref={searchRef}>
+        <div className="relative ml-auto hidden md:block max-w-xl flex-1" ref={searchRef}>
           <form
             className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 shadow-sm transition-colors"
             onSubmit={(e) => {
@@ -136,17 +136,26 @@ export default function Navbar() {
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="ml-auto md:ml-0 flex items-center gap-1.5 sm:gap-2 md:gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/patients')}
+            className="grid h-10 w-10 shrink-0 md:hidden place-items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-700"
+            title="Search"
+          >
+            <Search size={18} />
+          </button>
+
           <ThemeToggle />
-          
-          <button className="relative grid h-10 w-10 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-700" title="Notifications">
+
+          <button className="relative hidden sm:grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-700" title="Notifications">
             <Bell size={18} />
             <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-600" />
           </button>
 
           <div className="relative" ref={dropdownRef}>
             <button
-              className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 transition hover:bg-slate-100 dark:hover:bg-slate-700"
+              className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 sm:px-3 py-1.5 sm:py-2 transition hover:bg-slate-100 dark:hover:bg-slate-700"
               onClick={() => setDropdownOpen((v) => !v)}
             >
               <div className="grid h-8 w-8 place-items-center rounded-lg bg-blue-100 dark:bg-blue-900 text-sm font-semibold text-blue-700 dark:text-blue-300">
