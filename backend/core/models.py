@@ -239,7 +239,7 @@ class Billing(models.Model):
         return max((self.amount or 0) - (self.paid_amount or 0), 0)
 
     def update_payment_totals(self):
-        paid_total = self.payments.aggregate(total=Sum('amount')).get('total') or 0
+        paid_total = self.payments.filter(transaction_status='verified').aggregate(total=Sum('amount')).get('total') or 0
         self.paid_amount = paid_total
 
         if self.paid_amount >= self.amount:
@@ -291,15 +291,33 @@ class BillingPayment(models.Model):
         ('card', 'Card'),
         ('bank', 'Bank Transfer'),
         ('upi', 'UPI'),
+        ('esewa', 'eSewa'),
         ('insurance', 'Insurance'),
+    ]
+
+    GATEWAY_CHOICES = [
+        ('manual', 'Manual'),
+        ('esewa', 'eSewa'),
+        ('bank', 'Bank Transfer'),
+    ]
+
+    TRANSACTION_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('verified', 'Verified'),
+        ('failed', 'Failed'),
     ]
 
     billing = models.ForeignKey(Billing, on_delete=models.CASCADE, related_name='payments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='cash')
+    gateway = models.CharField(max_length=20, choices=GATEWAY_CHOICES, default='manual')
+    transaction_status = models.CharField(max_length=20, choices=TRANSACTION_STATUS_CHOICES, default='verified')
+    gateway_transaction_id = models.CharField(max_length=120, blank=True, default='')
+    gateway_payload = models.JSONField(null=True, blank=True)
     reference_number = models.CharField(max_length=100, blank=True, default='')
     notes = models.TextField(blank=True, default='')
     payment_date = models.DateTimeField(auto_now_add=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
     received_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='received_payments')
 
     def __str__(self):

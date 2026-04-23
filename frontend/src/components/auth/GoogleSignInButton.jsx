@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuthStore } from '../../store/authStore.js';
 import { authAPI } from '../../api/services.js';
+
 const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
+const FALLBACK_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const loadGoogleScript = () =>
   new Promise((resolve, reject) => {
@@ -40,11 +42,11 @@ export default function GoogleSignInButton({ onSuccess }) {
     authAPI.getAuthConfig()
       .then(({ data }) => {
         if (!isMounted) return;
-        setGoogleClientId(data.google_client_id || '');
+        setGoogleClientId(data.google_client_id || FALLBACK_GOOGLE_CLIENT_ID);
       })
       .catch(() => {
         if (!isMounted) return;
-        setGoogleClientId('');
+        setGoogleClientId(FALLBACK_GOOGLE_CLIENT_ID);
       })
       .finally(() => {
         if (isMounted) setConfigLoaded(true);
@@ -93,7 +95,7 @@ export default function GoogleSignInButton({ onSuccess }) {
         });
       })
       .catch((error) => {
-        toast.error(error.message);
+        toast.error(error.message || 'Google sign-in is temporarily unavailable.');
       });
 
     return () => {
@@ -113,7 +115,7 @@ export default function GoogleSignInButton({ onSuccess }) {
         type="button"
         disabled
         className="w-full inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 text-sm font-medium cursor-not-allowed"
-        title="Set GOOGLE_OAUTH_CLIENT_ID on the backend to enable Google sign-in."
+        title="Set GOOGLE_OAUTH_CLIENT_ID (or GOOGLE_CLIENT_ID) on the backend to enable Google sign-in."
       >
         Google sign-in not configured
       </button>

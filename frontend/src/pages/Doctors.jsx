@@ -118,6 +118,55 @@ export default function Doctors() {
     }
   };
 
+  const escapeCsv = (value) => {
+    const text = value == null ? '' : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
+  const handleExport = () => {
+    if (!rows.length) {
+      toast.error('No doctors to export');
+      return;
+    }
+
+    const header = [
+      'Doctor ID',
+      'First Name',
+      'Last Name',
+      'Full Name',
+      'Email',
+      'Phone',
+      'Specialization',
+      'License Number',
+      'Available',
+      'Created At',
+    ];
+
+    const lines = rows.map((row) => [
+      row.id,
+      row.first_name || '',
+      row.last_name || '',
+      row.full_name || '',
+      row.email || '',
+      row.phone || '',
+      row.specialization || '',
+      row.license_number || '',
+      row.is_available ? 'Yes' : 'No',
+      row.created_at || '',
+    ]);
+
+    const csv = [header, ...lines].map((cols) => cols.map(escapeCsv).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `doctors-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast.success('Doctors export downloaded');
+  };
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto w-full">
       <PageHeader 
@@ -125,13 +174,13 @@ export default function Doctors() {
         subtitle={`Showing ${rows.length} active practitioners`}
         actions={
           <>
-            <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition-colors">
+            <button onClick={handleExport} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition-colors">
               <Download size={16} /> Export
             </button>
             {canManageDoctors && (
               <button 
                 onClick={openCreate} 
-                className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
               >
                 <Plus size={16} /> Add doctor
               </button>
@@ -168,7 +217,7 @@ export default function Doctors() {
       ) : (
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[760px] text-sm">
               <thead className="bg-slate-50/60 dark:bg-slate-900/40">
                 <tr>
                   <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Doctor</th>
@@ -203,7 +252,7 @@ export default function Doctors() {
                       <StatusBadge value={row.is_available ? 'active' : 'inactive'} />
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <button onClick={() => viewDoctorDetails(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-100" title="View details">
                           <Eye size={16} />
                         </button>

@@ -65,7 +65,20 @@ export default function Register() {
 
   const onSubmit = async (values) => {
     try {
-      const result = await registerUser(values);
+      const payload = { ...values };
+
+      // Avoid sending empty date strings that DRF DateField rejects.
+      if (!payload.date_of_birth) {
+        delete payload.date_of_birth;
+      }
+
+      // Keep doctor registration payload focused on doctor fields.
+      if (payload.role === 'doctor') {
+        delete payload.gender;
+        delete payload.address;
+      }
+
+      const result = await registerUser(payload);
       if (result.ok) {
         toast.success('Account created successfully');
         const user = useAuthStore.getState().user;
@@ -191,6 +204,16 @@ export default function Register() {
               </div>
               {selectedRole === 'doctor' ? (
                 <>
+                  <div className="sm:col-span-2">
+                    <FormField
+                      label="Date of Birth (Optional)"
+                      name="date_of_birth"
+                      type="date"
+                      register={register}
+                      error={errors.date_of_birth?.message}
+                      touched={touchedFields.date_of_birth}
+                    />
+                  </div>
                   <div className="sm:col-span-2">
                     <FormField
                       label="Specialization"

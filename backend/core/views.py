@@ -12,8 +12,13 @@ from django.db.models import Q, Sum, Count
 from django.http import FileResponse
 from django.conf import settings
 from django.utils.text import slugify
+from django.shortcuts import redirect
 from datetime import timedelta
 from django.utils import timezone
+from collections import defaultdict
+from decimal import Decimal
+from urllib.parse import urlencode
+import uuid
 from .pdf_utils import generate_invoice_pdf, generate_medical_report_pdf
 
 from .models import Doctor, Patient, Appointment, MedicalRecord, MedicalReport, Billing, BillingPayment, User
@@ -465,7 +470,7 @@ class BillingPaymentViewSet(viewsets.ModelViewSet):
         'reception': {'list', 'retrieve', 'create', 'update', 'partial_update', 'destroy'},
     }
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['billing', 'payment_method']
+    filterset_fields = ['billing', 'payment_method', 'gateway', 'transaction_status']
     search_fields = ['billing__patient__first_name', 'billing__patient__last_name', 'reference_number', 'notes']
 
     def get_queryset(self):
@@ -491,6 +496,213 @@ class BillingPaymentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(received_by=self.request.user)
+
+
+def _can_access_billing(user, billing):
+    if user.role in {'admin', 'reception'}:
+        return True
+
+    if user.role == 'patient':
+        patient_profile = get_patient_profile_for_user(user, Patient)
+        return bool(patient_profile and billing.patient_id == patient_profile.id)
+
+    if user.role == 'doctor':
+        doctor_profile = get_doctor_profile_for_user(user, Doctor)
+        if not doctor_profile:
+            return False
+        return billing.appointment_id and billing.appointment and billing.appointment.doctor_id == doctor_profile.id
+
+    return False
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def initiate_esewa_payment(request, billing_id):
+    try:
+        billing = Billing.objects.select_related('appointment', 'appointment__doctor').get(id=billing_id)
+    except Billing.DoesNotExist:
+        return Response({'detail': 'Bill not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not _can_access_billing(request.user, billing):
+        return Response({'detail': 'You do not have access to this bill.'}, status=status.HTTP_403_FORBIDDEN)
+
+    if billing.balance_due <= 0:
+        return Response({'detail': 'This invoice is already fully paid.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    requested_amount = request.data.get('amount', billing.balance_due)
+    try:
+        amount = Decimal(str(requested_amount))
+    except Exception:
+        return Response({'amount': 'Invalid amount.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if amount <= 0:
+        return Response({'amount': 'Amount must be greater than 0.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if amount > billing.balance_due:
+        return Response({'amount': 'Amount exceeds outstanding balance.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    pid = f'INV{billing.id}-{uuid.uuid4().hex[:10].upper()}'
+    payment = BillingPayment.objects.create(
+        billing=billing,
+        amount=amount,
+        payment_method='esewa',
+        gateway='esewa',
+        transaction_status='pending',
+        reference_number=pid,
+        notes='eSewa payment initiated',
+        received_by=request.user,
+        gateway_payload={
+            'initiated_by': request.user.id,
+            'initiated_at': timezone.now().isoformat(),
+        },
+    )
+
+    params = {
+        'amt': str(amount),
+        'pdc': '0',
+        'psc': '0',
+        'txAmt': '0',
+        'tAmt': str(amount),
+        'pid': pid,
+        'scd': getattr(settings, 'ESEWA_MERCHANT_CODE', 'EPAYTEST'),
+        'su': getattr(settings, 'ESEWA_SUCCESS_URL', ''),
+        'fu': getattr(settings, 'ESEWA_FAILURE_URL', ''),
+    }
+    payment_url = f"{getattr(settings, 'ESEWA_BASE_URL', '').rstrip('/')}?{urlencode(params)}"
+
+    return Response({
+        'payment_id': payment.id,
+        'invoice_id': billing.id,
+        'amount': float(amount),
+        'reference_number': pid,
+        'payment_url': payment_url,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def esewa_success_callback(request):
+    pid = request.query_params.get('oid') or request.query_params.get('pid')
+    ref_id = request.query_params.get('refId', '')
+
+    if not pid:
+        return redirect(getattr(settings, 'ESEWA_REDIRECT_FAILURE', '/'))
+
+    payment = BillingPayment.objects.filter(reference_number=pid, gateway='esewa').first()
+    if not payment:
+        return redirect(getattr(settings, 'ESEWA_REDIRECT_FAILURE', '/'))
+
+    if payment.transaction_status != 'verified':
+        payment.transaction_status = 'verified'
+        payment.gateway_transaction_id = ref_id or payment.gateway_transaction_id
+        payment.verified_at = timezone.now()
+        payload = payment.gateway_payload or {}
+        payload['callback'] = dict(request.query_params)
+        payload['callback_at'] = timezone.now().isoformat()
+        payment.gateway_payload = payload
+        payment.save(update_fields=['transaction_status', 'gateway_transaction_id', 'verified_at', 'gateway_payload'])
+        payment.billing.update_payment_totals()
+
+    return redirect(getattr(settings, 'ESEWA_REDIRECT_SUCCESS', '/'))
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def esewa_failure_callback(request):
+    pid = request.query_params.get('oid') or request.query_params.get('pid')
+    payment = BillingPayment.objects.filter(reference_number=pid, gateway='esewa').first()
+    if payment and payment.transaction_status == 'pending':
+        payment.transaction_status = 'failed'
+        payload = payment.gateway_payload or {}
+        payload['failed_callback'] = dict(request.query_params)
+        payload['failed_at'] = timezone.now().isoformat()
+        payment.gateway_payload = payload
+        payment.save(update_fields=['transaction_status', 'gateway_payload'])
+
+    return redirect(getattr(settings, 'ESEWA_REDIRECT_FAILURE', '/'))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def initiate_bank_transfer(request, billing_id):
+    try:
+        billing = Billing.objects.select_related('appointment', 'appointment__doctor').get(id=billing_id)
+    except Billing.DoesNotExist:
+        return Response({'detail': 'Bill not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not _can_access_billing(request.user, billing):
+        return Response({'detail': 'You do not have access to this bill.'}, status=status.HTTP_403_FORBIDDEN)
+
+    if billing.balance_due <= 0:
+        return Response({'detail': 'This invoice is already fully paid.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    requested_amount = request.data.get('amount', billing.balance_due)
+    try:
+        amount = Decimal(str(requested_amount))
+    except Exception:
+        return Response({'amount': 'Invalid amount.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if amount <= 0:
+        return Response({'amount': 'Amount must be greater than 0.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if amount > billing.balance_due:
+        return Response({'amount': 'Amount exceeds outstanding balance.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    reference = f'BANK-INV{billing.id}-{uuid.uuid4().hex[:8].upper()}'
+    payment = BillingPayment.objects.create(
+        billing=billing,
+        amount=amount,
+        payment_method='bank',
+        gateway='bank',
+        transaction_status='pending',
+        reference_number=reference,
+        notes='Bank transfer initiated',
+        received_by=request.user,
+        gateway_payload={
+            'initiated_by': request.user.id,
+            'initiated_at': timezone.now().isoformat(),
+        },
+    )
+
+    return Response({
+        'payment_id': payment.id,
+        'invoice_id': billing.id,
+        'amount': float(amount),
+        'reference_number': reference,
+        'bank_details': {
+            'account_name': getattr(settings, 'BANK_TRANSFER_ACCOUNT_NAME', ''),
+            'bank_name': getattr(settings, 'BANK_TRANSFER_BANK_NAME', ''),
+            'account_number': getattr(settings, 'BANK_TRANSFER_ACCOUNT_NUMBER', ''),
+            'branch': getattr(settings, 'BANK_TRANSFER_BRANCH', ''),
+        },
+        'instructions': 'Complete the transfer using this reference number and ask billing desk to verify it.',
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def verify_billing_payment(request, payment_id):
+    if request.user.role not in {'admin', 'reception'}:
+        return Response({'detail': 'Only admin or reception can verify payments.'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        payment = BillingPayment.objects.select_related('billing').get(id=payment_id)
+    except BillingPayment.DoesNotExist:
+        return Response({'detail': 'Payment not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    gateway_txn = request.data.get('gateway_transaction_id', '')
+    notes = request.data.get('notes', '')
+
+    payment.transaction_status = 'verified'
+    payment.verified_at = timezone.now()
+    if gateway_txn:
+        payment.gateway_transaction_id = gateway_txn
+    if notes:
+        payment.notes = f"{payment.notes}\n{notes}".strip()
+    payment.save(update_fields=['transaction_status', 'verified_at', 'gateway_transaction_id', 'notes'])
+    payment.billing.update_payment_totals()
+
+    return Response({'detail': 'Payment verified successfully.'})
 
 
 @api_view(['GET'])
@@ -543,6 +755,7 @@ def billing_dashboard_stats(request):
     # Last 30 days collections
     thirty_days_ago = timezone.now() - timedelta(days=30)
     daily_collections = BillingPayment.objects.filter(
+        transaction_status='verified',
         payment_date__gte=thirty_days_ago
     ).extra(
         select={'payment_day': 'DATE(payment_date)'}
@@ -585,5 +798,127 @@ def billing_dashboard_stats(request):
             'overdue_60': float(overdue_60),
             'overdue_90': float(overdue_90),
         },
+    })
+
+
+def _patient_age(dob):
+    if not dob:
+        return None
+    today = timezone.localdate()
+    return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def ai_insights(request):
+    """Lightweight AI/ML-style insights based on historical behavior and risk scoring."""
+    today = timezone.localdate()
+    last_90_days = today - timedelta(days=90)
+    next_7_days = today + timedelta(days=7)
+
+    appointments_recent = Appointment.objects.filter(appointment_date__gte=last_90_days)
+    no_show_counts = defaultdict(int)
+    recent_counts = defaultdict(int)
+    for appt in appointments_recent:
+        pid = appt.patient_id
+        recent_counts[pid] += 1
+        if appt.status == 'no_show':
+            no_show_counts[pid] += 1
+
+    billing_items = Billing.objects.select_related('patient').all()
+    patient_balance = defaultdict(float)
+    overdue_balance = 0.0
+    for bill in billing_items:
+        balance = float(bill.balance_due or 0)
+        if balance <= 0:
+            continue
+        patient_balance[bill.patient_id] += balance
+        if bill.due_date and bill.due_date < today:
+            overdue_balance += balance
+
+    risk_candidates = []
+    for patient in Patient.objects.all():
+        score = 0
+        reasons = []
+        age = _patient_age(patient.date_of_birth)
+        if age is not None and age >= 65:
+            score += 2
+            reasons.append('senior age profile')
+        if patient.is_critical:
+            score += 3
+            reasons.append('critical care flag')
+        if patient.acuity_level and patient.acuity_level <= 2:
+            score += 2
+            reasons.append('high acuity')
+        if (patient.chronic_conditions or '').strip():
+            score += 1
+            reasons.append('chronic condition history')
+        balance = patient_balance.get(patient.id, 0.0)
+        if balance > 500:
+            score += 2
+            reasons.append('high outstanding balance')
+        missed = no_show_counts.get(patient.id, 0)
+        if missed >= 2:
+            score += 2
+            reasons.append('repeated missed appointments')
+
+        if score >= 3:
+            risk_candidates.append({
+                'patient_id': patient.id,
+                'patient_name': patient.full_name,
+                'risk_score': score,
+                'risk_level': 'high' if score >= 6 else 'medium',
+                'outstanding_balance': round(balance, 2),
+                'reasons': reasons,
+            })
+
+    risk_candidates.sort(key=lambda item: item['risk_score'], reverse=True)
+
+    no_show_predictions = []
+    upcoming = Appointment.objects.select_related('patient', 'doctor').filter(
+        appointment_date__gte=today,
+        appointment_date__lte=next_7_days,
+        status__in=['scheduled', 'pending']
+    )
+
+    for appt in upcoming:
+        pid = appt.patient_id
+        total_recent = recent_counts.get(pid, 0)
+        missed_recent = no_show_counts.get(pid, 0)
+        historical_rate = (missed_recent / total_recent) if total_recent else 0.0
+        days_ahead = (appt.appointment_date - today).days
+
+        probability = 0.08
+        probability += min(historical_rate * 0.75, 0.55)
+        if days_ahead >= 4:
+            probability += 0.08
+        if patient_balance.get(pid, 0.0) > 300:
+            probability += 0.06
+
+        probability = max(0.01, min(probability, 0.95))
+        no_show_predictions.append({
+            'appointment_id': appt.id,
+            'appointment_date': str(appt.appointment_date),
+            'appointment_time': str(appt.appointment_time),
+            'patient_name': appt.patient.full_name,
+            'doctor_name': appt.doctor.full_name,
+            'no_show_probability': round(probability, 2),
+        })
+
+    no_show_predictions.sort(key=lambda item: item['no_show_probability'], reverse=True)
+
+    high_risk_no_show_count = sum(1 for item in no_show_predictions if item['no_show_probability'] >= 0.5)
+
+    return Response({
+        'model_version': 'heuristic-risk-v1',
+        'generated_at': timezone.now().isoformat(),
+        'risk_summary': {
+            'high_risk_patients': sum(1 for item in risk_candidates if item['risk_level'] == 'high'),
+            'medium_risk_patients': sum(1 for item in risk_candidates if item['risk_level'] == 'medium'),
+            'overdue_balance': round(overdue_balance, 2),
+            'high_no_show_risk_appointments': high_risk_no_show_count,
+        },
+        'top_patient_risks': risk_candidates[:8],
+        'no_show_predictions': no_show_predictions[:8],
     })
 

@@ -1,4 +1,4 @@
-import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, Settings, ChevronLeft, ChevronRight, BrainCircuit } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { hasPermission } from '../lib/permissions.js';
@@ -12,6 +12,7 @@ const menuConfig = {
     { label: 'Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
     { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
+    { label: 'AI Triage', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
   ],
   doctor: [
@@ -21,6 +22,7 @@ const menuConfig = {
     { label: 'My Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
     { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
+    { label: 'AI Triage', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
   ],
   patient: [
@@ -37,6 +39,7 @@ const menuConfig = {
     { label: 'Doctors', path: '/doctors', icon: Stethoscope, permission: 'doctors.view' },
     { label: 'Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
+    { label: 'AI Triage', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
   ],
 };

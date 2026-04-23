@@ -8,7 +8,9 @@ from .views import (
     BillingViewSet, BillingPaymentViewSet,
     CustomTokenObtainPairView, current_user, register,
     forgot_password, change_password, profile, google_login, auth_config,
-    download_invoice_pdf, download_medical_report_pdf, billing_dashboard_stats,
+    download_invoice_pdf, download_medical_report_pdf, billing_dashboard_stats, ai_insights,
+    initiate_esewa_payment, esewa_success_callback, esewa_failure_callback,
+    initiate_bank_transfer, verify_billing_payment,
 )
 
 router = DefaultRouter()
@@ -33,8 +35,14 @@ urlpatterns = [
     path('profile/', profile, name='profile'),
     path('users/me/', current_user, name='current_user'),
     path('billing/<int:billing_id>/download-invoice/', download_invoice_pdf, name='download_invoice'),
+    path('billing/<int:billing_id>/esewa/initiate/', initiate_esewa_payment, name='initiate_esewa_payment'),
+    path('billing/esewa/success/', esewa_success_callback, name='esewa_success_callback'),
+    path('billing/esewa/failure/', esewa_failure_callback, name='esewa_failure_callback'),
+    path('billing/<int:billing_id>/bank-transfer/initiate/', initiate_bank_transfer, name='initiate_bank_transfer'),
+    path('billing-payments/<int:payment_id>/verify/', verify_billing_payment, name='verify_billing_payment'),
     path('medical-reports/<int:report_id>/download-report/', download_medical_report_pdf, name='download_report'),
     path('billing/dashboard/stats/', billing_dashboard_stats, name='billing_dashboard_stats'),
+    path('ai/insights/', ai_insights, name='ai_insights'),
 ]
 
 

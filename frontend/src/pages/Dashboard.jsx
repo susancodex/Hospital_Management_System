@@ -16,7 +16,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { appointmentsAPI, billingAPI, doctorsAPI, patientsAPI } from '../api/services.js';
+import { toast } from 'sonner';
+import { appointmentsAPI, billingAPI, doctorsAPI, patientsAPI, insightsAPI } from '../api/services.js';
 import StatusBadge from '../components/common/StatusBadge.jsx';
 import { useAuthStore } from '../store/authStore.js';
 
@@ -119,6 +120,7 @@ export default function Dashboard() {
   const [doctors, setDoctors] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [billing, setBilling] = useState([]);
+  const [aiInsights, setAiInsights] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -129,18 +131,21 @@ export default function Dashboard() {
           doctorsAPI.list(),
           appointmentsAPI.list(),
           billingAPI.list(),
+          insightsAPI.getAiInsights(),
         ]);
 
         setPatients(results[0].status === 'fulfilled' ? results[0].value.items : []);
         setDoctors(results[1].status === 'fulfilled' ? results[1].value.items : []);
         setAppointments(results[2].status === 'fulfilled' ? results[2].value.items : []);
         setBilling(results[3].status === 'fulfilled' ? results[3].value.items : []);
+        setAiInsights(results[4].status === 'fulfilled' ? results[4].value.data : null);
       } catch (error) {
         console.error('Dashboard loading error:', error);
         setPatients([]);
         setDoctors([]);
         setAppointments([]);
         setBilling([]);
+        setAiInsights(null);
       } finally {
         setLoading(false);
       }
@@ -191,6 +196,48 @@ export default function Dashboard() {
 
   const recentPatients = patients.slice(0, 5);
 
+  const handleGenerateReport = () => {
+    try {
+      const generatedAt = new Date();
+      const lines = [
+        'AetherCare HMS Dashboard Summary',
+        `Generated: ${generatedAt.toLocaleString()}`,
+        '',
+        'Key Metrics',
+        `- Total Patients: ${patients.length}`,
+        `- Active Doctors: ${doctors.length}`,
+        `- Today's Appointments: ${todaysAppointments.length}`,
+        `- Outstanding Revenue: $${outstanding.toFixed(2)}`,
+        `- Collected Revenue: $${revenue.toFixed(2)}`,
+        '',
+        'Today Appointments (Top 10)',
+      ];
+
+      todaysAppointments.slice(0, 10).forEach((item, index) => {
+        lines.push(
+          `${index + 1}. ${item.appointment_time || 'TBD'} | ${item.patient_name || 'Unknown'} | ${item.doctor_name || 'Unassigned'} | ${item.status || 'scheduled'}`
+        );
+      });
+
+      if (todaysAppointments.length === 0) {
+        lines.push('No appointments scheduled for today.');
+      }
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const link = document.createElement('a');
+      const fileDate = generatedAt.toISOString().slice(0, 10);
+      link.href = URL.createObjectURL(blob);
+      link.download = `dashboard-report-${fileDate}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+      toast.success('Dashboard report generated');
+    } catch {
+      toast.error('Unable to generate dashboard report');
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto w-full pb-8">
       {/* Header */}
@@ -201,12 +248,12 @@ export default function Dashboard() {
             {greeting()}, {userName}
           </h1>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm transition-colors">
+        <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <button onClick={handleGenerateReport} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm transition-colors">
             <FileText className="w-4 h-4" />
             Generate Report
           </button>
-          <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors disabled:opacity-50">
+          <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors disabled:opacity-50">
             <Plus className="w-4 h-4" />
             New Appointment
           </button>
@@ -313,7 +360,7 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead className="bg-slate-50/60 dark:bg-slate-900/40">
                   <tr>
                     <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
@@ -430,6 +477,48 @@ export default function Dashboard() {
               <OccupancyBar dept="ER" used={32} total={45} />
               <OccupancyBar dept="Cardiology" used={12} total={30} />
               <OccupancyBar dept="Pediatrics" used={24} total={40} />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">AI Insights</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Risk scoring and no-show prediction</p>
+            </div>
+            <div className="p-5 space-y-4">
+              {aiInsights ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-rose-100 dark:border-rose-900/50 bg-rose-50/70 dark:bg-rose-950/30 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-rose-600 dark:text-rose-400">High Risk Patients</p>
+                      <p className="mt-1 text-xl font-semibold text-rose-700 dark:text-rose-300">{aiInsights.risk_summary?.high_risk_patients || 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-100 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/30 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-amber-600 dark:text-amber-400">No-show Alerts</p>
+                      <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-300">{aiInsights.risk_summary?.high_no_show_risk_appointments || 0}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Top Risk Patients</p>
+                    <div className="space-y-2">
+                      {(aiInsights.top_patient_risks || []).slice(0, 3).map((item) => (
+                        <div key={item.patient_id} className="rounded-md border border-slate-200 dark:border-slate-800 px-3 py-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{item.patient_name}</p>
+                            <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${item.risk_level === 'high' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'}`}>
+                              {item.risk_level}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Score: {item.risk_score} • Balance: ${Number(item.outstanding_balance || 0).toFixed(2)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-slate-500 dark:text-slate-400">AI insights are currently unavailable.</p>
+              )}
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, CalendarDays, Clock, Filter, X, Download } from 'lucide-react';
+import { Plus, CalendarDays, Download, Eye, CheckCircle2, Ban } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -32,6 +32,8 @@ export default function Appointments() {
   
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [viewing, setViewing] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
   
   const [deleteId, setDeleteId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -74,6 +76,10 @@ export default function Appointments() {
     load();
   }, [filterPatient, filterDoctor]);
 
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [filterPatient, filterDoctor, dateFilter]);
+
   const openCreate = () => {
     setEditing(null);
     reset({ patient: '', doctor: '', appointment_date: '', appointment_time: '', status: 'scheduled', notes: '' });
@@ -110,6 +116,66 @@ export default function Appointments() {
   };
 
   const confirmDelete = (id) => setDeleteId(id);
+
+  const toggleSelect = (id) => {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
+  };
+
+  const toggleSelectAllVisible = () => {
+    const visibleIds = filteredRows.map((row) => row.id);
+    if (!visibleIds.length) return;
+    const allSelected = visibleIds.every((id) => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds((current) => current.filter((id) => !visibleIds.includes(id)));
+      return;
+    }
+    setSelectedIds((current) => Array.from(new Set([...current, ...visibleIds])));
+  };
+
+  const updatePayloadFor = (row, status) => ({
+    patient: row.patient,
+    doctor: row.doctor,
+    appointment_date: row.appointment_date,
+    appointment_time: row.appointment_time || '',
+    status,
+    notes: row.notes || '',
+  });
+
+  const handleBulkStatus = async (status) => {
+    if (!selectedIds.length) {
+      toast.error('Select at least one appointment first');
+      return;
+    }
+
+    const targets = filteredRows.filter((row) => selectedIds.includes(row.id));
+    if (!targets.length) {
+      toast.error('No matching selected appointments in current view');
+      return;
+    }
+
+    try {
+      await Promise.all(
+        targets.map((row) => appointmentsAPI.update(row.id, updatePayloadFor(row, status)))
+      );
+      toast.success(`${targets.length} appointment${targets.length > 1 ? 's' : ''} marked as ${status}`);
+      setSelectedIds([]);
+      await load();
+    } catch {
+      toast.error('Unable to update selected appointments');
+    }
+  };
+
+  const handleQuickStatus = async (row, status) => {
+    try {
+      await appointmentsAPI.update(row.id, { ...row, status });
+      toast.success(`Appointment marked as ${status}`);
+      await load();
+    } catch {
+      toast.error('Unable to update appointment status');
+    }
+  };
   
   const onDelete = async () => {
     if (!deleteId) return;
@@ -143,24 +209,91 @@ export default function Appointments() {
     return true;
   });
 
+  const escapeCsv = (value) => {
+    const text = value == null ? '' : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
+  const handleExport = () => {
+    if (!filteredRows.length) {
+      toast.error('No appointments to export');
+      return;
+    }
+
+    const header = ['Appointment ID', 'Date', 'Time', 'Patient', 'Doctor', 'Status', 'Notes'];
+    const lines = filteredRows.map((row) => [
+      row.id,
+      row.appointment_date || '',
+      row.appointment_time || '',
+      row.patient_name || '',
+      row.doctor_name || '',
+      row.status || '',
+      row.notes || '',
+    ]);
+
+    const csv = [header, ...lines].map((cols) => cols.map(escapeCsv).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `appointments-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast.success('Appointments export downloaded');
+  };
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto w-full">
       <PageHeader
         title="Appointments"
         subtitle="Manage consultations and schedules"
         actions={
-          canManageAppointments ? (
+          <>
             <button
-              onClick={openCreate}
-              className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+              onClick={handleExport}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm transition-colors"
             >
-              <Plus className="w-4 h-4" /> New Appointment
+              <Download className="w-4 h-4" /> Export
             </button>
-          ) : null
+            {canManageAppointments ? (
+              <button
+                onClick={openCreate}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+              >
+                <Plus className="w-4 h-4" /> New Appointment
+              </button>
+            ) : null}
+          </>
         }
       />
 
       <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        {canManageAppointments ? (
+          <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60 dark:bg-slate-900/40">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              {selectedIds.length} selected
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleBulkStatus('completed')}
+                disabled={!selectedIds.length}
+                className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-xs font-medium text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" /> Mark Completed
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBulkStatus('cancelled')}
+                disabled={!selectedIds.length}
+                className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-xs font-medium text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-50"
+              >
+                <Ban className="w-3.5 h-3.5" /> Mark Cancelled
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -188,11 +321,11 @@ export default function Appointments() {
               This week
             </button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <select
               value={filterPatient}
               onChange={(e) => setFilterPatient(e.target.value)}
-              className="h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+              className="h-9 w-full sm:w-auto rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
             >
               <option value="">All patients</option>
               {patients.map((p) => (
@@ -202,13 +335,24 @@ export default function Appointments() {
             <select
               value={filterDoctor}
               onChange={(e) => setFilterDoctor(e.target.value)}
-              className="h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+              className="h-9 w-full sm:w-auto rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
             >
               <option value="">All doctors</option>
               {doctors.map((d) => (
                 <option key={d.id} value={d.id}>{d.full_name}</option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => {
+                setFilterPatient('');
+                setFilterDoctor('');
+                setDateFilter('all');
+              }}
+              className="h-9 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              Clear
+            </button>
           </div>
         </div>
 
@@ -218,9 +362,19 @@ export default function Appointments() {
           ) : filteredRows.length === 0 ? (
             <EmptyState icon={CalendarDays} title="No appointments found" description="Adjust your filters or create a new appointment." />
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[760px] text-sm">
               <thead className="bg-slate-50/60 dark:bg-slate-900/40">
                 <tr>
+                  {canManageAppointments ? (
+                    <th className="h-10 px-5 text-left">
+                      <input
+                        type="checkbox"
+                        onChange={toggleSelectAllVisible}
+                        checked={filteredRows.length > 0 && filteredRows.every((row) => selectedIds.includes(row.id))}
+                        aria-label="Select all visible appointments"
+                      />
+                    </th>
+                  ) : null}
                   <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date & Time</th>
                   <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Patient</th>
                   <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Doctor</th>
@@ -231,6 +385,16 @@ export default function Appointments() {
               <tbody>
                 {filteredRows.map((row) => (
                   <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
+                    {canManageAppointments ? (
+                      <td className="px-5 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(row.id)}
+                          onChange={() => toggleSelect(row.id)}
+                          aria-label={`Select appointment ${row.id}`}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-5 py-3">
                       <div className="font-medium text-slate-900 dark:text-slate-100">{row.appointment_date}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400">{row.appointment_time || 'Time TBD'}</div>
@@ -251,6 +415,34 @@ export default function Appointments() {
                     </td>
                     <td className="px-5 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setViewing(row)}
+                          className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          title="View"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        {canManageAppointments && row.status !== 'completed' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickStatus(row, 'completed')}
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                            title="Mark completed"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                        ) : null}
+                        {canManageAppointments && row.status !== 'cancelled' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickStatus(row, 'cancelled')}
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                            title="Mark cancelled"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        ) : null}
                         {canManageAppointments ? (
                           <button
                             type="button"
@@ -381,6 +573,55 @@ export default function Appointments() {
         isLoading={isDeleting}
         isDangerous={true}
       />
+
+      <AppModal
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        title={viewing ? `Appointment #${viewing.id}` : 'Appointment Details'}
+        size="md"
+        footer={
+          <button
+            type="button"
+            onClick={() => setViewing(null)}
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium"
+          >
+            Close
+          </button>
+        }
+      >
+        {viewing ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/50 dark:bg-slate-900/40">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Patient</p>
+                <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{viewing.patient_name || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Doctor</p>
+                <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{viewing.doctor_name || 'Unassigned'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Date</p>
+                <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{viewing.appointment_date || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Time</p>
+                <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{viewing.appointment_time || 'Time TBD'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Status</p>
+                <div className="mt-1"><StatusBadge value={viewing.status} /></div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Notes</p>
+              <p className="mt-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                {viewing.notes || 'No notes added for this appointment.'}
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </AppModal>
     </div>
   );
 }

@@ -139,13 +139,13 @@ export default function Patients() {
         subtitle={`Showing ${filtered.length} total patients`}
         actions={
           <>
-            <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition-colors">
+            <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition-colors">
               <Download size={16} /> Export
             </button>
             {canManagePatients && (
               <button 
                 onClick={openCreate} 
-                className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
               >
                 <Plus size={16} /> Add patient
               </button>
@@ -182,7 +182,7 @@ export default function Patients() {
       ) : (
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[760px] text-sm">
               <thead className="bg-slate-50/60 dark:bg-slate-900/40">
                 <tr>
                   <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Patient</th>
@@ -222,7 +222,7 @@ export default function Patients() {
                       <StatusBadge value="Discharged" />
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <button onClick={() => viewPatientDetails(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-100" title="View details">
                           <Eye size={16} />
                         </button>
@@ -245,20 +245,20 @@ export default function Patients() {
           </div>
           
           {totalPages > 1 && (
-            <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/40">
+            <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/40">
               <p className="text-sm text-slate-500 dark:text-slate-400">Showing {(page - 1) * PAGE_SIZE + 1} to {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}</p>
-              <div className="flex items-center gap-2">
+              <div className="w-full sm:w-auto flex items-center gap-2">
                 <button 
                   disabled={page === 1} 
                   onClick={() => setPage(v => Math.max(1, v - 1))} 
-                  className="inline-flex items-center gap-2 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium disabled:opacity-50 transition-colors"
+                  className="w-1/2 sm:w-auto inline-flex items-center justify-center gap-2 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium disabled:opacity-50 transition-colors"
                 >
                   Previous
                 </button>
                 <button 
                   disabled={page === totalPages} 
                   onClick={() => setPage(v => Math.min(totalPages, v + 1))} 
-                  className="inline-flex items-center gap-2 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium disabled:opacity-50 transition-colors"
+                  className="w-1/2 sm:w-auto inline-flex items-center justify-center gap-2 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium disabled:opacity-50 transition-colors"
                 >
                   Next
                 </button>

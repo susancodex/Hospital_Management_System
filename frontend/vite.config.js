@@ -20,4 +20,7 @@ export default defineConfig({
     emptyOutDir: true,
     chunkSizeWarningLimit: 1500
   },
+  optimizeDeps: {
+    exclude: ['@tailwindcss/node', '@tailwindcss/vite']
+  }
 })

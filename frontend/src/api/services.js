@@ -137,6 +137,8 @@ export const billingAPI = {
   retrieve: (id) => apiClient.get(`/billing/${id}/`),
   update: (id, data) => apiClient.put(`/billing/${id}/`, data),
   delete: (id) => apiClient.delete(`/billing/${id}/`),
+  initiateEsewaPayment: (id, payload = {}) => apiClient.post(`/billing/${id}/esewa/initiate/`, payload),
+  initiateBankTransfer: (id, payload = {}) => apiClient.post(`/billing/${id}/bank-transfer/initiate/`, payload),
 };
 
 export const medicalReportsAPI = {
@@ -159,4 +161,9 @@ export const billingPaymentsAPI = {
   retrieve: (id) => apiClient.get(`/billing-payments/${id}/`),
   update: (id, data) => apiClient.put(`/billing-payments/${id}/`, data),
   delete: (id) => apiClient.delete(`/billing-payments/${id}/`),
+  verify: (id, payload = {}) => apiClient.post(`/billing-payments/${id}/verify/`, payload),
+};
+
+export const insightsAPI = {
+  getAiInsights: () => apiClient.get('/ai/insights/'),
 };

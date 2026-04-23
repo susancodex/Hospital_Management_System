@@ -13,6 +13,7 @@ import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import MedicalRecords from './pages/MedicalRecords.jsx';
 import MedicalReports from './pages/MedicalReports.jsx';
+import AiTriage from './pages/AiTriage.jsx';
 import Patients from './pages/Patients.jsx';
 import Profile from './pages/Profile.jsx';
 import Register from './pages/Register.jsx';
@@ -79,6 +80,7 @@ function App() {
             <Route path="/appointments" element={<Appointments />} />
             <Route path="/medical-records" element={<MedicalRecords />} />
             <Route path="/medical-reports" element={<MedicalReports />} />
+            <Route path="/ai-triage" element={<AiTriage />} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/profile" element={<Profile />} />
           </Route>

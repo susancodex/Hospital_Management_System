@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Download, Plus, Wallet, Pencil, Trash2, ReceiptText, ArrowUpRight, ArrowDownRight, Eye } from 'lucide-react';
+import { Download, Plus, Wallet, Pencil, Trash2, ReceiptText, ArrowUpRight, ArrowDownRight, Eye, Landmark, Smartphone } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -28,7 +28,7 @@ const schema = z.object({
 const paymentSchema = z.object({
   billing: z.coerce.number().min(1, 'Bill is required'),
   amount: z.coerce.number().positive('Amount must be positive'),
-  payment_method: z.enum(['cash', 'card', 'bank', 'upi', 'insurance']),
+  payment_method: z.enum(['cash', 'card', 'bank', 'upi', 'esewa', 'insurance']),
   reference_number: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -59,7 +59,15 @@ export default function Billing() {
   const [open, setOpen] = useState(false);
   const [openPayment, setOpenPayment] = useState(false);
   const [viewInvoice, setViewInvoice] = useState(null);
+  const [bankTransferInfo, setBankTransferInfo] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [verifyingPaymentId, setVerifyingPaymentId] = useState(null);
+  const [paymentAuditFilter, setPaymentAuditFilter] = useState({
+    status: 'all',
+    method: 'all',
+    gateway: 'all',
+    search: '',
+  });
   
   // Delete confirm
   const [deleteId, setDeleteId] = useState(null);
@@ -125,6 +133,39 @@ export default function Billing() {
   const allPayments = useMemo(() => {
     return Object.values(paymentsByBill).flat().sort((a, b) => b.id - a.id).slice(0, 5);
   }, [paymentsByBill]);
+
+  const paymentAuditRows = useMemo(() => {
+    const query = paymentAuditFilter.search.trim().toLowerCase();
+
+    return Object.values(paymentsByBill)
+      .flat()
+      .sort((a, b) => b.id - a.id)
+      .filter((item) => {
+        if (paymentAuditFilter.status !== 'all' && item.transaction_status !== paymentAuditFilter.status) {
+          return false;
+        }
+        if (paymentAuditFilter.method !== 'all' && item.payment_method !== paymentAuditFilter.method) {
+          return false;
+        }
+        if (paymentAuditFilter.gateway !== 'all' && (item.gateway || 'manual') !== paymentAuditFilter.gateway) {
+          return false;
+        }
+        if (!query) return true;
+
+        const haystack = [
+          item.reference_number,
+          item.gateway_transaction_id,
+          item.notes,
+          item.billing_patient_name,
+          `INV-${String(item.billing).padStart(5, '0')}`,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        return haystack.includes(query);
+      });
+  }, [paymentsByBill, paymentAuditFilter]);
 
   const openCreate = () => {
     setEditing(null);
@@ -219,6 +260,117 @@ export default function Billing() {
     window.open(`${baseUrl}/billing/${row.id}/download-invoice/`, '_blank', 'noopener,noreferrer');
   };
 
+  const handleEsewaPay = async (row) => {
+    try {
+      const response = await billingAPI.initiateEsewaPayment(row.id, {
+        amount: Number(row.balance_due || 0),
+      });
+      const paymentUrl = response?.data?.payment_url;
+      if (!paymentUrl) {
+        toast.error('Unable to start eSewa payment right now');
+        return;
+      }
+      window.open(paymentUrl, '_blank', 'noopener,noreferrer');
+      toast.success('eSewa window opened');
+      await load();
+    } catch {
+      toast.error('Failed to initiate eSewa payment');
+    }
+  };
+
+  const handleBankTransfer = async (row) => {
+    try {
+      const response = await billingAPI.initiateBankTransfer(row.id, {
+        amount: Number(row.balance_due || 0),
+      });
+      setBankTransferInfo(response.data);
+      toast.success('Bank transfer instructions generated');
+      await load();
+    } catch {
+      toast.error('Failed to start bank transfer');
+    }
+  };
+
+  const verifyBankTransfer = async () => {
+    if (!bankTransferInfo?.payment_id) return;
+    try {
+      await billingPaymentsAPI.verify(bankTransferInfo.payment_id, {
+        notes: 'Verified from billing dashboard',
+      });
+      toast.success('Bank transfer verified');
+      setBankTransferInfo(null);
+      await load();
+    } catch {
+      toast.error('Unable to verify bank transfer');
+    }
+  };
+
+  const verifyAuditPayment = async (paymentId) => {
+    setVerifyingPaymentId(paymentId);
+    try {
+      await billingPaymentsAPI.verify(paymentId, {
+        notes: 'Verified from payment audit',
+      });
+      toast.success('Payment verified');
+      await load();
+    } catch {
+      toast.error('Unable to verify this payment');
+    } finally {
+      setVerifyingPaymentId(null);
+    }
+  };
+
+  const escapeCsv = (value) => {
+    const text = value == null ? '' : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
+  const handleExport = () => {
+    if (!rows.length) {
+      toast.error('No billing rows to export');
+      return;
+    }
+
+    const header = [
+      'Invoice',
+      'Patient',
+      'Status',
+      'Amount',
+      'Paid Amount',
+      'Balance Due',
+      'Due Date',
+      'Insurance Provider',
+      'Claim Number',
+      'Description',
+      'Created At',
+    ];
+
+    const lines = rows.map((row) => [
+      `INV-${String(row.id).padStart(5, '0')}`,
+      row.patient_name || '',
+      row.status || '',
+      Number(row.amount || 0).toFixed(2),
+      Number(row.paid_amount || 0).toFixed(2),
+      Number(row.balance_due || 0).toFixed(2),
+      row.due_date || '',
+      row.insurance_provider || '',
+      row.insurance_claim_number || '',
+      row.description || '',
+      row.created_at || '',
+    ]);
+
+    const csv = [header, ...lines].map((cols) => cols.map(escapeCsv).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `billing-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast.success('Billing export downloaded');
+  };
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto w-full">
       <PageHeader
@@ -226,11 +378,11 @@ export default function Billing() {
         subtitle={`$${summary.outstanding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} outstanding across ${summary.count} invoices`}
         actions={(
           <>
-            <button className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm">
+            <button onClick={handleExport} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm">
               <Download className="w-4 h-4" /> Export
             </button>
             {canManageBilling ? (
-              <button onClick={openCreate} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors">
+              <button onClick={openCreate} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors">
                 <Plus className="w-4 h-4" /> New invoice
               </button>
             ) : null}
@@ -281,7 +433,7 @@ export default function Billing() {
               ) : rows.length === 0 ? (
                 <EmptyState title="No invoices found" description={canManageBilling ? 'Create an invoice to start billing.' : 'Billing entries will appear here once available.'} />
               ) : (
-                <table className="w-full text-sm whitespace-nowrap">
+                <table className="w-full min-w-[840px] text-sm whitespace-nowrap">
                   <thead className="bg-slate-50/60 dark:bg-slate-900/40">
                     <tr>
                       <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Invoice #</th>
@@ -310,6 +462,26 @@ export default function Billing() {
                             {canManageBilling ? (
                               <button type="button" onClick={() => openPaymentCreate(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40" title="Record Payment">
                                 <Wallet className="w-4 h-4" />
+                              </button>
+                            ) : null}
+                            {canManageBilling && Number(row.balance_due || 0) > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => handleEsewaPay(row)}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-md text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                                title="Pay with eSewa"
+                              >
+                                <Smartphone className="w-4 h-4" />
+                              </button>
+                            ) : null}
+                            {canManageBilling && Number(row.balance_due || 0) > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => handleBankTransfer(row)}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-md text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                                title="Bank transfer details"
+                              >
+                                <Landmark className="w-4 h-4" />
                               </button>
                             ) : null}
                             <button onClick={() => downloadInvoice(row)} className="inline-flex items-center justify-center h-8 w-8 rounded-md text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40" title="Print/Download">
@@ -348,7 +520,7 @@ export default function Billing() {
               ) : allPayments.length === 0 ? (
                 <EmptyState title="No payments" description="No recent payments recorded." />
               ) : (
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[540px] text-sm">
                   <thead className="bg-slate-50/60 dark:bg-slate-900/40">
                     <tr>
                       <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Method</th>
@@ -361,6 +533,9 @@ export default function Billing() {
                       <tr key={p.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                         <td className="px-5 py-3">
                           <span className="capitalize text-slate-900 dark:text-slate-100 font-medium">{p.payment_method}</span>
+                          {p.transaction_status && p.transaction_status !== 'verified' ? (
+                            <div className="text-[11px] uppercase tracking-wide text-amber-600 mt-0.5">{p.transaction_status}</div>
+                          ) : null}
                           <div className="text-xs text-slate-500 font-mono mt-0.5">INV-{String(p.billing).padStart(5, '0')}</div>
                         </td>
                         <td className="px-5 py-3 text-slate-600 dark:text-slate-300 text-xs">
@@ -368,6 +543,105 @@ export default function Billing() {
                         </td>
                         <td className="px-5 py-3 text-right font-medium text-emerald-600 dark:text-emerald-400 tabular-nums">
                           +${Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Payment Audit</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Track pending and verified gateway transactions.</p>
+            </div>
+
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 border-b border-slate-100 dark:border-slate-800">
+              <select
+                value={paymentAuditFilter.status}
+                onChange={(e) => setPaymentAuditFilter((prev) => ({ ...prev, status: e.target.value }))}
+                className="h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="verified">Verified</option>
+                <option value="failed">Failed</option>
+              </select>
+
+              <select
+                value={paymentAuditFilter.gateway}
+                onChange={(e) => setPaymentAuditFilter((prev) => ({ ...prev, gateway: e.target.value }))}
+                className="h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm"
+              >
+                <option value="all">All Gateways</option>
+                <option value="manual">Manual</option>
+                <option value="esewa">eSewa</option>
+                <option value="bank">Bank</option>
+              </select>
+
+              <select
+                value={paymentAuditFilter.method}
+                onChange={(e) => setPaymentAuditFilter((prev) => ({ ...prev, method: e.target.value }))}
+                className="h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm"
+              >
+                <option value="all">All Methods</option>
+                <option value="cash">Cash</option>
+                <option value="card">Card</option>
+                <option value="bank">Bank Transfer</option>
+                <option value="upi">UPI</option>
+                <option value="esewa">eSewa</option>
+                <option value="insurance">Insurance</option>
+              </select>
+
+              <input
+                type="text"
+                value={paymentAuditFilter.search}
+                onChange={(e) => setPaymentAuditFilter((prev) => ({ ...prev, search: e.target.value }))}
+                placeholder="Search ref / invoice / patient"
+                className="h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm"
+              />
+            </div>
+
+            <div className="overflow-x-auto">
+              {paymentAuditRows.length === 0 ? (
+                <EmptyState title="No payments matched" description="Try changing your audit filters." />
+              ) : (
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead className="bg-slate-50/60 dark:bg-slate-900/40">
+                    <tr>
+                      <th className="h-10 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Reference</th>
+                      <th className="h-10 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Invoice</th>
+                      <th className="h-10 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Method</th>
+                      <th className="h-10 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Gateway</th>
+                      <th className="h-10 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                      <th className="h-10 px-4 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Amount</th>
+                      <th className="h-10 px-4 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentAuditRows.slice(0, 15).map((item) => (
+                      <tr key={item.id} className="border-t border-slate-100 dark:border-slate-800">
+                        <td className="px-4 py-3 text-xs font-mono text-slate-600 dark:text-slate-300">{item.reference_number || '-'}</td>
+                        <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">INV-{String(item.billing).padStart(5, '0')}</td>
+                        <td className="px-4 py-3 text-xs capitalize text-slate-700 dark:text-slate-200">{item.payment_method}</td>
+                        <td className="px-4 py-3 text-xs uppercase text-slate-500 dark:text-slate-400">{item.gateway || 'manual'}</td>
+                        <td className="px-4 py-3 text-xs uppercase tracking-wide text-slate-700 dark:text-slate-200">{item.transaction_status || 'verified'}</td>
+                        <td className="px-4 py-3 text-right text-xs font-medium tabular-nums text-slate-900 dark:text-slate-100">${Number(item.amount || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">
+                          {canManageBilling && item.transaction_status !== 'verified' ? (
+                            <button
+                              type="button"
+                              onClick={() => verifyAuditPayment(item.id)}
+                              disabled={verifyingPaymentId === item.id}
+                              className="h-7 px-2 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-xs font-medium disabled:opacity-50"
+                            >
+                              {verifyingPaymentId === item.id ? 'Verifying...' : 'Verify'}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400">-</span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -484,6 +758,7 @@ export default function Billing() {
                 { value: 'card', label: 'Card' },
                 { value: 'bank', label: 'Bank Transfer' },
                 { value: 'upi', label: 'UPI' },
+                { value: 'esewa', label: 'eSewa' },
                 { value: 'insurance', label: 'Insurance' },
               ]} 
             />
@@ -596,6 +871,50 @@ export default function Billing() {
         onCancel={() => setDeleteId(null)} 
         isDangerous={true} 
       />
+
+      <AppModal
+        open={!!bankTransferInfo}
+        onClose={() => setBankTransferInfo(null)}
+        title="Bank Transfer Details"
+        size="md"
+        footer={(
+          <>
+            <button
+              type="button"
+              onClick={() => setBankTransferInfo(null)}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium"
+            >
+              Close
+            </button>
+            {canManageBilling ? (
+              <button
+                type="button"
+                onClick={verifyBankTransfer}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+              >
+                Mark as Verified
+              </button>
+            ) : null}
+          </>
+        )}
+      >
+        {bankTransferInfo ? (
+          <div className="space-y-4 text-sm">
+            <p className="text-slate-600 dark:text-slate-300">
+              Share these details with the payer and use the same reference in transfer remarks.
+            </p>
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950 p-4 space-y-2">
+              <div><span className="font-medium">Account Name:</span> {bankTransferInfo.bank_details?.account_name}</div>
+              <div><span className="font-medium">Bank:</span> {bankTransferInfo.bank_details?.bank_name}</div>
+              <div><span className="font-medium">Branch:</span> {bankTransferInfo.bank_details?.branch}</div>
+              <div><span className="font-medium">Account No:</span> {bankTransferInfo.bank_details?.account_number}</div>
+              <div><span className="font-medium">Amount:</span> ${Number(bankTransferInfo.amount || 0).toFixed(2)}</div>
+              <div><span className="font-medium">Reference:</span> {bankTransferInfo.reference_number}</div>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{bankTransferInfo.instructions}</p>
+          </div>
+        ) : null}
+      </AppModal>
     </div>
   );
 }

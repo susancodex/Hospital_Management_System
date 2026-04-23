@@ -11,9 +11,19 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+if load_dotenv:
+    load_dotenv(BASE_DIR / '.env')
+    load_dotenv(BASE_DIR.parent / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -25,7 +35,7 @@ SECRET_KEY = 'django-insecure-e1of2#zo*-2#ss&ruee#c!#@xuz4&hoq66563$smey@%96@c#8
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*', '.vercel.app']
+ALLOWED_HOSTS = ['*', '.vercel.app', '.onrender.com']
 
 
 # Application definition
@@ -79,8 +89,6 @@ WSGI_APPLICATION = 'hospital_system.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
-import os
 
 DATABASES = {
     'default': {
@@ -152,4 +160,21 @@ REST_FRAMEWORK = {
 }
 
 AUTH_USER_MODEL = 'core.User'
-GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
+GOOGLE_OAUTH_CLIENT_ID = (
+    os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
+    or os.environ.get('GOOGLE_CLIENT_ID')
+    or os.environ.get('VITE_GOOGLE_CLIENT_ID')
+    or ''
+)
+
+ESEWA_BASE_URL = os.environ.get('ESEWA_BASE_URL', 'https://rc-epay.esewa.com.np/epay/main')
+ESEWA_MERCHANT_CODE = os.environ.get('ESEWA_MERCHANT_CODE', 'EPAYTEST')
+ESEWA_SUCCESS_URL = os.environ.get('ESEWA_SUCCESS_URL', 'http://localhost:8000/api/billing/esewa/success/')
+ESEWA_FAILURE_URL = os.environ.get('ESEWA_FAILURE_URL', 'http://localhost:8000/api/billing/esewa/failure/')
+ESEWA_REDIRECT_SUCCESS = os.environ.get('ESEWA_REDIRECT_SUCCESS', 'http://localhost:5173/billing?payment=success')
+ESEWA_REDIRECT_FAILURE = os.environ.get('ESEWA_REDIRECT_FAILURE', 'http://localhost:5173/billing?payment=failed')
+
+BANK_TRANSFER_ACCOUNT_NAME = os.environ.get('BANK_TRANSFER_ACCOUNT_NAME', 'AetherCare Hospital Pvt Ltd')
+BANK_TRANSFER_BANK_NAME = os.environ.get('BANK_TRANSFER_BANK_NAME', 'Global IME Bank')
+BANK_TRANSFER_ACCOUNT_NUMBER = os.environ.get('BANK_TRANSFER_ACCOUNT_NUMBER', '001001001001')
+BANK_TRANSFER_BRANCH = os.environ.get('BANK_TRANSFER_BRANCH', 'Kathmandu')
