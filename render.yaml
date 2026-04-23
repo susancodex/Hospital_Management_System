@@ -1,6 +1,7 @@
 services:
   - type: web
     name: hospital-management-backend
+    plan: free
     env: python
     rootDir: backend
     buildCommand: |
@@ -21,6 +22,7 @@ services:
 
   - type: web
     name: hospital-management-frontend
+    plan: free
     env: static
     rootDir: frontend
     buildCommand: npm install && npm run build
