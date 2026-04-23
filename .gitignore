@@ -14,3 +14,15 @@ next.user-config.*
 node_modules
 .next/
 .DS_Store
+dist/
+frontend/dist/
+frontend/node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+backend/static/
+backend/media/
+
+# Local database
+backend/db.sqlite3

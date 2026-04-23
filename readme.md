@@ -1,153 +1,59 @@
 # Hospital Management System
 
-Full-stack production-ready hospital management application with React + Vite frontend and Django REST backend.
+Full-stack hospital management application with:
+- Django REST API backend in [backend](backend)
+- React + Vite frontend in [frontend](frontend)
 
-## 🚀 Production Deployment
+## Tech Stack
+- Backend: Django, DRF, SimpleJWT, django-filter, WhiteNoise, Gunicorn
+- Frontend: React 19, Vite 8, Tailwind CSS 4, Axios, Zustand
+- Deployment target: Render (backend) + Vercel (frontend)
 
-This project is configured for **Render** deployment. Use the included `render.yaml` blueprint to deploy both backend and frontend automatically.
+## Local Development
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
-
-## 🛠️ Tech Stack
-
-| Layer | Technologies |
-|-------|--------------|
-| **Frontend** | React 19, Vite 8, Tailwind CSS 4, React Router v7, Zustand, Axios, React Hook Form + Zod, ShadCN UI |
-| **Backend** | Django 6, Django REST Framework 3.17, SimpleJWT, django-filter, CORS Headers, Whitenoise |
-| **Deployment** | Render (Blueprint), Gunicorn, SQLite |
-
-## 📁 Project Structure
-
-Clean, production-ready project structure:
-
-```
-Hospital_Management_System/
-├── backend/                     # Django Backend
-│   ├── core/                    # Main application
-│   │   ├── migrations/          # Database migrations
-│   │   ├── models.py            # Database models
-│   │   ├── serializers.py       # DRF serializers
-│   │   ├── views.py             # API views
-│   │   └── urls.py              # API routes
-│   ├── hospital_system/         # Django project config
-│   │   ├── settings.py          # Application settings
-│   │   ├── urls.py              # Root URL config
-│   │   └── wsgi.py              # WSGI entry point
-│   ├── manage.py                # Django management script
-│   └── requirements.txt         # Python dependencies
-├── frontend/                    # React Frontend
-│   ├── src/
-│   │   ├── components/          # Reusable UI components
-│   │   ├── pages/               # Page components
-│   │   ├── layouts/             # Layout components
-│   │   ├── lib/                 # Utilities & config
-│   │   ├── api/                 # API service layer
-│   │   └── styles/              # Global styles
-│   ├── index.html
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── tailwind.config.js
-│   └── tsconfig.json
-├── render.yaml                  # Render deployment blueprint
-├── RENDER_DEPLOYMENT_GUIDE.md   # Deployment instructions
-└── readme.md
-```
-
-## 📋 Prerequisites
-
-- Node.js 20+
-- Python 3.12+
-- pip / uv
-
-## 🚦 Local Development
-
-### Backend Setup
+### 1. Backend
 ```bash
-# Install dependencies using pyproject.toml
-pip install .
-
-# Or for development mode
-pip install -e .
-
+pip install -r backend/requirements.txt
 cd backend
 python manage.py migrate
 python manage.py runserver 0.0.0.0:8000
 ```
 
-Backend runs at: `http://localhost:8000`
-
-### Frontend Setup
+### 2. Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Frontend runs at: `http://localhost:5000`
+Frontend: http://localhost:5000  
+Backend API: http://localhost:8000/api
 
-## 🏗️ Production Build
+## Deployment
 
-```bash
-# Build frontend
-cd frontend
-npm run build
+This repo is prepared for split deployment:
+- Render for backend using [render.yaml](render.yaml)
+- Vercel for frontend using [vercel.json](vercel.json)
 
-# Collect static files for Django
-cd ../backend
-python manage.py collectstatic --noinput
-```
+Render Blueprint provisions:
+- One Python web service (`hospital-management-backend`)
+- One managed Postgres database (`hospital-management-db`)
 
-## 🔌 API Endpoints
+Detailed steps and environment variables are documented in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-Base URL: `http://localhost:8000/api`
+## Important Environment Variables
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | `/token/` | Login (get JWT tokens) | ❌ |
-| POST | `/token/refresh/` | Refresh access token | ❌ |
-| POST | `/register/` | Register new user | ❌ |
-| GET/PATCH | `/profile/` | User profile | ✅ |
-| GET/POST | `/patients/` | Patients CRUD | ✅ |
-| GET/POST | `/doctors/` | Doctors CRUD | ✅ |
-| GET/POST | `/appointments/` | Appointments CRUD | ✅ |
-| GET/POST | `/medical-records/` | Medical Records | ✅ |
-| GET/POST | `/billing/` | Billing & Payments | ✅ |
+### Backend (Render)
+- `SECRET_KEY`
+- `DEBUG=False`
+- `DATABASE_URL` (in Blueprint mode, auto-linked from Render Postgres)
+- `ALLOWED_HOSTS=.onrender.com,localhost,127.0.0.1`
+- `CORS_ALLOWED_ORIGINS=https://your-frontend.vercel.app`
+- `CSRF_TRUSTED_ORIGINS=https://your-frontend.vercel.app`
 
-## ⚙️ Environment Variables
+### Frontend (Vercel)
+- `VITE_API_BASE_URL=https://your-render-backend.onrender.com/api`
 
-Set these in production:
-
-| Variable | Description |
-|----------|-------------|
-| `SECRET_KEY` | Django secret key |
-| `DEBUG` | Set to `False` in production |
-| `ALLOWED_HOSTS` | Comma separated allowed hosts |
-| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID (optional) |
-
-## 📦 Deployment
-
-### Render Deployment
-1. Push code to GitHub
-2. Go to Render Dashboard → New → Blueprint
-3. Select this repository
-4. Confirm deployment
-
-Render will automatically provision:
-- Backend Python service on port 8000
-- Frontend static site
-- Automatically run migrations and static collection
-
-## 🔒 Production Features
-
-✅ CORS configured  
-✅ WhiteNoise for static file serving  
-✅ JWT Authentication  
-✅ Input validation with Zod  
-✅ Role based access control  
-✅ Production ready WSGI server (Gunicorn)  
-✅ Automatic database migrations  
-✅ Zero downtime deployments
-
-## 📄 License
-
+## License
 MIT
+

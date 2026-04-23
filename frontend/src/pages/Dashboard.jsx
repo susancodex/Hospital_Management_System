@@ -529,6 +529,9 @@ export default function Dashboard() {
         <span className="text-emerald-600 dark:text-emerald-500 font-medium">
           All systems operational
         </span>
+        <span className="block mt-1 text-slate-500 dark:text-slate-400">
+          Created by Susan Acharya
+        </span>
       </footer>
     </div>
   );

@@ -167,8 +167,9 @@ export default function Landing() {
             <Activity className="h-4 w-4 text-teal-700 dark:text-teal-500" />
             <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">AetherCare</span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-400 text-center sm:text-right">
             AetherCare HMS &copy; {new Date().getFullYear()} &middot; Secure & HIPAA-aware &middot; System status: <span className="text-emerald-600 dark:text-emerald-500 font-medium">All systems operational</span>
+            <span className="block mt-1">Created by Susan Acharya</span>
           </p>
         </div>
       </footer>
