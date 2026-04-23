@@ -4,9 +4,10 @@ services:
     plan: free
     env: python
     buildCommand: |
+      uv sync &&
       cd backend &&
-      python manage.py collectstatic --noinput &&
-      python manage.py migrate &&
+      uv run python manage.py collectstatic --noinput &&
+      uv run python manage.py migrate &&
       cd ../frontend &&
       npm install &&
       npm run build &&
