@@ -37,7 +37,8 @@ This repo is prepared for split deployment:
 
 Render Blueprint provisions:
 - One Python web service (`hospital-management-backend`)
-- One managed Postgres database (`hospital-management-db`)
+
+If your Render account already has an active free Postgres database, set `DATABASE_URL` from that existing database in the web service environment variables.
 
 Detailed steps and environment variables are documented in [DEPLOYMENT.md](DEPLOYMENT.md).
 
@@ -48,7 +49,7 @@ Note: Render free-tier services do not support `preDeployCommand`; migrations ru
 ### Backend (Render)
 - `SECRET_KEY`
 - `DEBUG=False`
-- `DATABASE_URL` (in Blueprint mode, auto-linked from Render Postgres)
+- `DATABASE_URL` (set manually from your existing Render Postgres connection string)
 - `ALLOWED_HOSTS=.onrender.com,localhost,127.0.0.1`
 - `CORS_ALLOWED_ORIGIN_REGEXES=^https://.*\\.vercel\\.app$`
 - `CSRF_TRUSTED_ORIGINS=https://*.vercel.app`

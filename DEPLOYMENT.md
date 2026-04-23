@@ -15,18 +15,27 @@ The repository includes [render.yaml](render.yaml) for Blueprint deployment.
 4. Apply the Blueprint.
 
 Render will create one Python web service named `hospital-management-backend`.
-It also provisions one managed Postgres database named `hospital-management-db`.
+
+Important for Render free tier: only one active free Postgres database is allowed per account.
+This Blueprint does not create a database resource, so you can attach an existing database.
 
 ### Backend environment variables
 Set these in Render service settings:
 
 - `SECRET_KEY`: generate a secure value
 - `DEBUG`: `False`
-- `DATABASE_URL`: auto-populated from Render Postgres (Blueprint)
+- `DATABASE_URL`: set this manually from your existing Render Postgres connection string
 - `ALLOWED_HOSTS`: `.onrender.com,localhost,127.0.0.1`
 - `CORS_ALLOWED_ORIGIN_REGEXES`: `^https://.*\\.vercel\\.app$`
 - `CSRF_TRUSTED_ORIGINS`: `https://*.vercel.app`
 - `GOOGLE_OAUTH_CLIENT_ID`: optional
+
+If you already have a free Postgres database:
+1. Open that database in Render.
+2. Copy its External Database URL (connection string).
+3. Open the web service environment settings.
+4. Add `DATABASE_URL` with that value.
+5. Redeploy the service.
 
 ### Build and start commands (already in render.yaml)
 - Build:
