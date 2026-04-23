@@ -1,125 +1,148 @@
 # Hospital Management System
 
-Full-stack hospital management application with a React + Vite frontend and a Django REST backend.
+Full-stack production-ready hospital management application with React + Vite frontend and Django REST backend.
 
-## Stack
+## 🚀 Production Deployment
 
-- Frontend: React 19, Vite 8, Tailwind CSS 4, React Router, Zustand, Axios, React Hook Form + Zod
-- Backend: Django 5, Django REST Framework, SimpleJWT, django-filter, django-cors-headers
-- Database: SQLite (`db.sqlite3`)
+This project is configured for **Render** deployment. Use the included `render.yaml` blueprint to deploy both backend and frontend automatically.
 
-## Project Structure
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+|-------|--------------|
+| **Frontend** | React 19, Vite 8, Tailwind CSS 4, React Router v7, Zustand, Axios, React Hook Form + Zod, ShadCN UI |
+| **Backend** | Django 6, Django REST Framework 3.17, SimpleJWT, django-filter, CORS Headers, Whitenoise |
+| **Deployment** | Render (Blueprint), Gunicorn, SQLite |
+
+## 📁 Project Structure
+
+Clean, production-ready project structure:
 
 ```
-├── backend/                 # Django backend
-│   ├── core/            # Django app (models, serializers, views, urls)
-│   ├── hospital_system/ # Django project settings and root urls
-│   ├── manage.py      # Django management script
-│   └── db.sqlite3   # Database
-├── frontend/            # React frontend
-│   ├── src/          # React source code
-│   └── package.json  # Frontend dependencies
-├── dist/              # Built frontend assets
+Hospital_Management_System/
+├── backend/                     # Django Backend
+│   ├── core/                    # Main application
+│   │   ├── migrations/          # Database migrations
+│   │   ├── models.py            # Database models
+│   │   ├── serializers.py       # DRF serializers
+│   │   ├── views.py             # API views
+│   │   └── urls.py              # API routes
+│   ├── hospital_system/         # Django project config
+│   │   ├── settings.py          # Application settings
+│   │   ├── urls.py              # Root URL config
+│   │   └── wsgi.py              # WSGI entry point
+│   ├── manage.py                # Django management script
+│   └── requirements.txt         # Python dependencies
+├── frontend/                    # React Frontend
+│   ├── src/
+│   │   ├── components/          # Reusable UI components
+│   │   ├── pages/               # Page components
+│   │   ├── layouts/             # Layout components
+│   │   ├── lib/                 # Utilities & config
+│   │   ├── api/                 # API service layer
+│   │   └── styles/              # Global styles
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── tailwind.config.js
+│   └── tsconfig.json
+├── render.yaml                  # Render deployment blueprint
+├── RENDER_DEPLOYMENT_GUIDE.md   # Deployment instructions
 └── readme.md
 ```
 
-## Prerequisites
+## 📋 Prerequisites
 
 - Node.js 20+
 - Python 3.12+
+- pip / uv
 
-## Install Dependencies
+## 🚦 Local Development
 
-### Frontend
-
-```bash
-cd frontend
-npm install
-```
-
-### Backend
-
-```bash
-pip install django django-cors-headers django-filter djangorestframework djangorestframework-simplejwt Pillow
-```
-
-## Run the Project
-
-Open two terminals in the project root.
-
-### 1) Start Django backend
-
+### Backend Setup
 ```bash
 cd backend
+pip install -r requirements.txt
 python manage.py migrate
 python manage.py runserver 0.0.0.0:8000
 ```
 
-Backend URL:
+Backend runs at: `http://localhost:8000`
 
-- http://localhost:8000
-- API base used by frontend: http://localhost:8000/api
-
-### 2) Start React frontend
-
+### Frontend Setup
 ```bash
 cd frontend
-npm run dev -- --host 0.0.0.0
+npm install
+npm run dev
 ```
 
-Frontend URL:
+Frontend runs at: `http://localhost:5000`
 
-- Usually http://localhost:5000
-- If 5000 is busy, Vite automatically picks the next available port
-
-## Build Frontend
+## 🏗️ Production Build
 
 ```bash
+# Build frontend
 cd frontend
 npm run build
+
+# Collect static files for Django
+cd ../backend
+python manage.py collectstatic --noinput
 ```
 
-Build output is generated in `dist/`.
+## 🔌 API Endpoints
 
-## Authentication Notes
-
-- JWT tokens are stored in localStorage:
-  - `access_token`
-  - `refresh_token`
-- Frontend auth service supports `/auth/...` routes
-
-## API Endpoints
-
-Base API URL: `http://localhost:8000/api`
+Base URL: `http://localhost:8000/api`
 
 | Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| POST | `/token/` | Login and receive access/refresh tokens | No |
-| POST | `/token/refresh/` | Refresh access token | No |
-| POST | `/register/` | Register a new user | No |
-| POST | `/forgot-password/` | Reset password using username + email | No |
-| POST | `/change-password/` | Change current user password | Yes |
-| GET/PATCH | `/profile/` | Get or update profile (supports image upload) | Yes |
-| GET | `/users/me/` | Get current authenticated user | Yes |
-| GET/POST | `/patients/` | List or create patients | Yes |
-| GET/PATCH/PUT/DELETE | `/patients/{id}/` | Retrieve, update, or delete patient | Yes |
-| GET/POST | `/doctors/` | List or create doctors | Yes |
-| GET/PATCH/PUT/DELETE | `/doctors/{id}/` | Retrieve, update, or delete doctor | Yes |
-| GET/POST | `/appointments/` | List or create appointments | Yes |
-| GET/PATCH/PUT/DELETE | `/appointments/{id}/` | Retrieve, update, or delete appointment | Yes |
-| GET/POST | `/medical-records/` | List or create medical records | Yes |
-| GET/PATCH/PUT/DELETE | `/medical-records/{id}/` | Retrieve, update, or delete record | Yes |
-| GET/POST | `/billing/` | List or create billing entries | Yes |
-| GET/PATCH/PUT/DELETE | `/billing/{id}/` | Retrieve, update, or delete billing entry | Yes |
+|--------|----------|-------------|------|
+| POST | `/token/` | Login (get JWT tokens) | ❌ |
+| POST | `/token/refresh/` | Refresh access token | ❌ |
+| POST | `/register/` | Register new user | ❌ |
+| GET/PATCH | `/profile/` | User profile | ✅ |
+| GET/POST | `/patients/` | Patients CRUD | ✅ |
+| GET/POST | `/doctors/` | Doctors CRUD | ✅ |
+| GET/POST | `/appointments/` | Appointments CRUD | ✅ |
+| GET/POST | `/medical-records/` | Medical Records | ✅ |
+| GET/POST | `/billing/` | Billing & Payments | ✅ |
 
-## Common Issues
+## ⚙️ Environment Variables
 
-### `ModuleNotFoundError: No module named 'django'`
-Install backend dependencies in the active Python environment.
+Set these in production:
 
-### `Cannot use ImageField because Pillow is not installed`
-Install Pillow:
+| Variable | Description |
+|----------|-------------|
+| `SECRET_KEY` | Django secret key |
+| `DEBUG` | Set to `False` in production |
+| `ALLOWED_HOSTS` | Comma separated allowed hosts |
+| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID (optional) |
 
-```bash
-pip install Pillow
-```
+## 📦 Deployment
+
+### Render Deployment
+1. Push code to GitHub
+2. Go to Render Dashboard → New → Blueprint
+3. Select this repository
+4. Confirm deployment
+
+Render will automatically provision:
+- Backend Python service on port 8000
+- Frontend static site
+- Automatically run migrations and static collection
+
+## 🔒 Production Features
+
+✅ CORS configured  
+✅ WhiteNoise for static file serving  
+✅ JWT Authentication  
+✅ Input validation with Zod  
+✅ Role based access control  
+✅ Production ready WSGI server (Gunicorn)  
+✅ Automatic database migrations  
+✅ Zero downtime deployments
+
+## 📄 License
+
+MIT
