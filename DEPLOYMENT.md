@@ -24,8 +24,8 @@ Set these in Render service settings:
 - `DEBUG`: `False`
 - `DATABASE_URL`: auto-populated from Render Postgres (Blueprint)
 - `ALLOWED_HOSTS`: `.onrender.com,localhost,127.0.0.1`
-- `CORS_ALLOWED_ORIGINS`: `https://your-frontend.vercel.app`
-- `CSRF_TRUSTED_ORIGINS`: `https://your-frontend.vercel.app`
+- `CORS_ALLOWED_ORIGIN_REGEXES`: `^https://.*\\.vercel\\.app$`
+- `CSRF_TRUSTED_ORIGINS`: `https://*.vercel.app`
 - `GOOGLE_OAUTH_CLIENT_ID`: optional
 
 ### Build and start commands (already in render.yaml)
@@ -61,3 +61,5 @@ The repository includes [vercel.json](vercel.json) configured for the Vite front
 - API base URL is environment-driven in [frontend/src/api/client.js](frontend/src/api/client.js).
 - CORS and CSRF trusted origins are environment-driven in [backend/hospital_system/settings.py](backend/hospital_system/settings.py).
 - Database configuration in [backend/hospital_system/settings.py](backend/hospital_system/settings.py) uses `DATABASE_URL` when present and falls back to SQLite for local development.
+
+

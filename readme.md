@@ -48,8 +48,8 @@ Detailed steps and environment variables are documented in [DEPLOYMENT.md](DEPLO
 - `DEBUG=False`
 - `DATABASE_URL` (in Blueprint mode, auto-linked from Render Postgres)
 - `ALLOWED_HOSTS=.onrender.com,localhost,127.0.0.1`
-- `CORS_ALLOWED_ORIGINS=https://your-frontend.vercel.app`
-- `CSRF_TRUSTED_ORIGINS=https://your-frontend.vercel.app`
+- `CORS_ALLOWED_ORIGIN_REGEXES=^https://.*\\.vercel\\.app$`
+- `CSRF_TRUSTED_ORIGINS=https://*.vercel.app`
 
 ### Frontend (Vercel)
 - `VITE_API_BASE_URL=https://your-render-backend.onrender.com/api`

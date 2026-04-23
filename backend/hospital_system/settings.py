@@ -57,6 +57,11 @@ CSRF_COOKIE_SECURE = not DEBUG
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
 
+if not DEBUG:
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
 
 # Application definition
 
@@ -90,9 +95,19 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = [
     origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()
 ]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    pattern.strip()
+    for pattern in os.environ.get('CORS_ALLOWED_ORIGIN_REGEXES', r'^https://.*\.vercel\.app$').split(',')
+    if pattern.strip()
+]
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
-    origin.strip() for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()
+    origin.strip()
+    for origin in os.environ.get(
+        'CSRF_TRUSTED_ORIGINS',
+        'https://*.vercel.app,http://localhost:5000,http://127.0.0.1:5000',
+    ).split(',')
+    if origin.strip()
 ]
 
 ROOT_URLCONF = 'hospital_system.urls'
