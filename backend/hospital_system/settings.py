@@ -147,6 +147,10 @@ STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+FRONTEND_DIST = BASE_DIR.parent / 'frontend' / 'dist'
+WHITENOISE_ROOT = str(FRONTEND_DIST) if FRONTEND_DIST.exists() else None
+WHITENOISE_INDEX_FILE = True
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
