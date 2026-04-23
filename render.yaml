@@ -5,14 +5,13 @@ services:
     env: python
     buildCommand: |
       cd backend &&
-      pip install -r requirements.txt &&
       python manage.py collectstatic --noinput &&
       python manage.py migrate &&
       cd ../frontend &&
       npm install &&
       npm run build &&
       cp -rf dist/* ../backend/static/
-    startCommand: cd backend && gunicorn hospital_system.wsgi:application
+    startCommand: cd backend && uv run gunicorn hospital_system.wsgi:application
     envVars:
       - key: DEBUG
         value: false
