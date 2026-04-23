@@ -31,9 +31,8 @@ Set these in Render service settings:
 ### Build and start commands (already in render.yaml)
 - Build:
   - `pip install -r backend/requirements.txt`
-  - `python manage.py collectstatic --noinput`
-- Pre-deploy:
   - `python manage.py migrate --noinput`
+  - `python manage.py collectstatic --noinput`
 - Start:
   - `gunicorn hospital_system.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120`
 

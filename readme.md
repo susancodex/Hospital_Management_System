@@ -41,6 +41,8 @@ Render Blueprint provisions:
 
 Detailed steps and environment variables are documented in [DEPLOYMENT.md](DEPLOYMENT.md).
 
+Note: Render free-tier services do not support `preDeployCommand`; migrations run in `buildCommand`.
+
 ## Important Environment Variables
 
 ### Backend (Render)
