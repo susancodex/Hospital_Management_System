@@ -63,8 +63,13 @@ Hospital_Management_System/
 
 ### Backend Setup
 ```bash
+# Install dependencies using pyproject.toml
+pip install .
+
+# Or for development mode
+pip install -e .
+
 cd backend
-pip install -r requirements.txt
 python manage.py migrate
 python manage.py runserver 0.0.0.0:8000
 ```
