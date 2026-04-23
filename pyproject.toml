@@ -14,8 +14,4 @@ dependencies = [
     "reportlab>=4.4.10",
     "gunicorn>=22.0.0",
     "whitenoise>=6.6.0",
-    dependencies = [
-    "django",
-    "gunicorn",
-]
 ]
