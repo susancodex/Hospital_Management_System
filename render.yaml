@@ -1,14 +1,18 @@
 services:
   - type: web
-    name: hospital-management-backend
+    name: hospital-management
     plan: free
     env: python
-    rootDir: backend
     buildCommand: |
+      cd backend &&
       pip install -r requirements.txt &&
       python manage.py collectstatic --noinput &&
-      python manage.py migrate
-    startCommand: gunicorn hospital_system.wsgi:application
+      python manage.py migrate &&
+      cd ../frontend &&
+      npm install &&
+      npm run build &&
+      cp -rf dist/* ../backend/static/
+    startCommand: cd backend && gunicorn hospital_system.wsgi:application
     envVars:
       - key: DEBUG
         value: false
@@ -18,13 +22,4 @@ services:
         generateValue: true
       - key: PYTHON_VERSION
         value: 3.12.0
-    autoDeploy: true
-
-  - type: web
-    name: hospital-management-frontend
-    plan: free
-    env: static
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
     autoDeploy: true
