@@ -1,9 +1,12 @@
 services:
   - type: web
     name: hospital-management
+    runtime: python
     plan: free
-    env: python
+    region: oregon
+    branch: main
     buildCommand: |
+<<<<<<< HEAD
       uv sync &&
       cd backend &&
       uv run python manage.py collectstatic --noinput &&
@@ -13,13 +16,21 @@ services:
       npm run build &&
       cp -rf dist/* ../backend/static/
     startCommand: cd backend && uv run gunicorn hospital_system.wsgi:application
+=======
+      pip install -r backend/requirements.txt
+      cd frontend && npm install && npm run build && cd ..
+      cd backend && python manage.py collectstatic --noinput && python manage.py migrate --noinput
+    startCommand: cd backend && gunicorn hospital_system.wsgi:application --bind 0.0.0.0:$PORT --workers 2
+>>>>>>> 641cf18 (Configure project for deployment on Render by updating settings and build process)
     envVars:
-      - key: DEBUG
-        value: false
-      - key: ALLOWED_HOSTS
-        value: .onrender.com
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: NODE_VERSION
+        value: 20.18.0
       - key: SECRET_KEY
         generateValue: true
-      - key: PYTHON_VERSION
-        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: .onrender.com
     autoDeploy: true

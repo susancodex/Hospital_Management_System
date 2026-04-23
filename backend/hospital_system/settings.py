@@ -30,6 +30,7 @@ if load_dotenv:
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
+<<<<<<< HEAD
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-e1of2#zo*-2#ss&ruee#c!#@xuz4&hoq66563$smey@%96@c#8')
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -44,6 +45,21 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
+=======
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-e1of2#zo*-2#ss&ruee#c!#@xuz4&hoq66563$smey@%96@c#8',
+)
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.environ.get('DEBUG', 'True').lower() in ('1', 'true', 'yes', 'on')
+
+ALLOWED_HOSTS = [
+    h.strip() for h in os.environ.get(
+        'ALLOWED_HOSTS', '*,.vercel.app,.onrender.com,.replit.dev,.replit.app'
+    ).split(',') if h.strip()
+]
+>>>>>>> 641cf18 (Configure project for deployment on Render by updating settings and build process)
 
 
 # Application definition
