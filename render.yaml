@@ -22,7 +22,21 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         value: ""
       - key: CORS_ALLOWED_ORIGIN_REGEXES
-        value: ^https://.*\.vercel\.app$
+        value: ^https://.*\.vercel\.app$,^https://.*\.onrender\.com$
       - key: CSRF_TRUSTED_ORIGINS
-        value: https://*.vercel.app
+        value: https://*.vercel.app,https://*.onrender.com
+    autoDeploy: true
+
+  - type: web
+    name: hospital-management-frontend
+    runtime: static
+    plan: free
+    region: oregon
+    branch: main
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://hospital-management-backend.onrender.com/api
     autoDeploy: true

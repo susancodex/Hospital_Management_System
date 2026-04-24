@@ -7,12 +7,13 @@ Full-stack hospital management application with:
 ## Tech Stack
 - Backend: Django, DRF, SimpleJWT, django-filter, WhiteNoise, Gunicorn
 - Frontend: React 19, Vite 8, Tailwind CSS 4, Axios, Zustand
-- Deployment target: Render (backend) + Vercel (frontend)
+Deployment target: Render (backend + optional frontend static site) or Vercel (frontend)
 
 ## Local Development
 
 ### 1. Backend
 ```bash
+You can also deploy the frontend from Render using the `hospital-management-frontend` static service in [render.yaml](render.yaml).
 pip install -r backend/requirements.txt
 cd backend
 python manage.py migrate

@@ -97,7 +97,10 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOWED_ORIGIN_REGEXES = [
     pattern.strip()
-    for pattern in os.environ.get('CORS_ALLOWED_ORIGIN_REGEXES', r'^https://.*\.vercel\.app$').split(',')
+    for pattern in os.environ.get(
+        'CORS_ALLOWED_ORIGIN_REGEXES',
+        r'^https://.*\.vercel\.app$,^https://.*\.onrender\.com$',
+    ).split(',')
     if pattern.strip()
 ]
 CORS_ALLOW_CREDENTIALS = True
@@ -105,7 +108,7 @@ CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
         'CSRF_TRUSTED_ORIGINS',
-        'https://*.vercel.app,http://localhost:5000,http://127.0.0.1:5000',
+        'https://*.vercel.app,https://*.onrender.com,http://localhost:5000,http://127.0.0.1:5000',
     ).split(',')
     if origin.strip()
 ]
@@ -133,16 +136,28 @@ WSGI_APPLICATION = 'hospital_system.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 
-if DATABASE_URL and dj_database_url:
-    DATABASES = {
-        'default': dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=600,
-            ssl_require=not DEBUG,
-        )
-    }
+# Only parse DATABASE_URL if it's a valid connection string
+# Valid schemes: postgres, postgresql, mysql, sqlite, etc.
+if DATABASE_URL and dj_database_url and any(DATABASE_URL.startswith(scheme) for scheme in ['postgres', 'postgresql', 'mysql', 'sqlite', 'oracle', 'mssql', 'cockroach', 'redshift', 'timescale', 'mysqlgis', 'postgis']):
+    try:
+        DATABASES = {
+            'default': dj_database_url.parse(
+                DATABASE_URL,
+                conn_max_age=600,
+                ssl_require=not DEBUG,
+            )
+        }
+    except Exception as e:
+        # Fallback to SQLite if DATABASE_URL parsing fails
+        print(f"Warning: DATABASE_URL parsing failed ({e}), falling back to SQLite")
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+            }
+        }
 else:
     DATABASES = {
         'default': {

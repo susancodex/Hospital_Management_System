@@ -2,7 +2,7 @@
 
 This project is configured for:
 - Backend deployment on Render
-- Frontend deployment on Vercel
+- Frontend deployment on Vercel or Render Static Site
 
 ## 1. Backend Deployment (Render)
 
@@ -56,7 +56,21 @@ The repository includes [vercel.json](vercel.json) configured for the Vite front
    - `VITE_API_BASE_URL=https://your-render-backend.onrender.com/api`
 4. Deploy.
 
-## 3. Post-deployment checks
+## 3. Frontend Deployment (Render Static Site)
+
+The same [render.yaml](render.yaml) includes a static frontend service:
+- `hospital-management-frontend`
+
+### Steps
+1. In Render Blueprint deploy, keep both services selected:
+  - `hospital-management-backend`
+  - `hospital-management-frontend`
+2. After first deploy, open the frontend service env vars.
+3. Confirm `VITE_API_BASE_URL` points to your backend API URL:
+  - `https://your-backend-service.onrender.com/api`
+4. Redeploy the frontend service.
+
+## 4. Post-deployment checks
 
 1. Backend health endpoint:
    - `https://your-render-backend.onrender.com/api/`
@@ -64,7 +78,7 @@ The repository includes [vercel.json](vercel.json) configured for the Vite front
 3. Login, registration, and CRUD requests succeed.
 4. Browser network tab shows API calls targeting Render URL, not localhost.
 
-## 4. Notes
+## 5. Notes
 
 - API base URL is environment-driven in [frontend/src/api/client.js](frontend/src/api/client.js).
 - CORS and CSRF trusted origins are environment-driven in [backend/hospital_system/settings.py](backend/hospital_system/settings.py).
