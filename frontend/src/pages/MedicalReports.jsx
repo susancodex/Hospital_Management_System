@@ -65,16 +65,21 @@ export default function MedicalReports() {
       if (typeFilter) params.report_type = typeFilter;
       if (searchQuery.trim()) params.search = searchQuery.trim();
 
-      const [reports, p, d, a] = await Promise.all([
+      const results = await Promise.allSettled([
         medicalReportsAPI.list(params),
         patientsAPI.list(),
         doctorsAPI.list(),
         appointmentsAPI.list(),
       ]);
-      setRows(reports.items || []);
-      setPatients(p.items || []);
-      setDoctors(d.items || []);
-      setAppointments(a.items || []);
+
+      if (results[0].status !== 'fulfilled') {
+        throw results[0].reason;
+      }
+
+      setRows(results[0].value.items || []);
+      setPatients(results[1].status === 'fulfilled' ? (results[1].value.items || []) : []);
+      setDoctors(results[2].status === 'fulfilled' ? (results[2].value.items || []) : []);
+      setAppointments(results[3].status === 'fulfilled' ? (results[3].value.items || []) : []);
     } catch {
       toast.error('Failed to load medical reports');
     } finally {

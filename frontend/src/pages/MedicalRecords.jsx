@@ -47,14 +47,19 @@ export default function MedicalRecords() {
   const load = async () => {
     setLoading(true);
     try {
-      const [records, p, d] = await Promise.all([
+      const results = await Promise.allSettled([
         medicalRecordsAPI.list(patientFilter ? { patient: patientFilter } : {}),
         patientsAPI.list(),
         doctorsAPI.list(),
       ]);
-      setRows(records.items || []);
-      setPatients(p.items || []);
-      setDoctors(d.items || []);
+
+      if (results[0].status !== 'fulfilled') {
+        throw results[0].reason;
+      }
+
+      setRows(results[0].value.items || []);
+      setPatients(results[1].status === 'fulfilled' ? (results[1].value.items || []) : []);
+      setDoctors(results[2].status === 'fulfilled' ? (results[2].value.items || []) : []);
     } catch {
       toast.error('Failed to load medical records');
     } finally {

@@ -57,14 +57,19 @@ export default function Appointments() {
       // Simple client-side date filtering below since API might not support these exact text params
       // but we will fetch all matching patient/doctor and filter in memory if needed for 'dateFilter'
       
-      const [a, p, d] = await Promise.all([
+      const results = await Promise.allSettled([
         appointmentsAPI.list(params),
         patientsAPI.list(),
         doctorsAPI.list()
       ]);
-      setRows(a.items || []);
-      setPatients(p.items || []);
-      setDoctors(d.items || []);
+
+      if (results[0].status !== 'fulfilled') {
+        throw results[0].reason;
+      }
+
+      setRows(results[0].value.items || []);
+      setPatients(results[1].status === 'fulfilled' ? (results[1].value.items || []) : []);
+      setDoctors(results[2].status === 'fulfilled' ? (results[2].value.items || []) : []);
     } catch {
       toast.error('Failed to load appointments');
     } finally {
