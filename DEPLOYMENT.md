@@ -2,7 +2,7 @@
 
 This project is configured for:
 - Backend deployment on Render
-- Frontend deployment on Vercel or Render Static Site
+- Frontend deployment on Vercel
 
 ## 1. Backend Deployment (Render)
 
@@ -39,7 +39,7 @@ If you already have a free Postgres database:
 
 ### Build and start commands (already in render.yaml)
 - Build:
-  - `pip install -r backend/requirements.txt`
+  - `pip install -r requirements.txt`
   - `python manage.py migrate --noinput`
   - `python manage.py collectstatic --noinput`
 - Start:
@@ -47,30 +47,16 @@ If you already have a free Postgres database:
 
 ## 2. Frontend Deployment (Vercel)
 
-The repository includes [vercel.json](vercel.json) configured for the Vite frontend in [frontend](frontend).
+The repository includes [vercel.json](vercel.json) configured for the Vite frontend in [frontend](frontend), while keeping the monorepo layout.
 
 ### Steps
 1. Import the repository in Vercel.
-2. Keep the detected project settings from `vercel.json`.
+2. Framework preset: Vite (from `vercel.json`).
 3. Add environment variable:
    - `VITE_API_BASE_URL=https://your-render-backend.onrender.com/api`
 4. Deploy.
 
-## 3. Frontend Deployment (Render Static Site)
-
-The same [render.yaml](render.yaml) includes a static frontend service:
-- `hospital-management-frontend`
-
-### Steps
-1. In Render Blueprint deploy, keep both services selected:
-  - `hospital-management-backend`
-  - `hospital-management-frontend`
-2. After first deploy, open the frontend service env vars.
-3. Confirm `VITE_API_BASE_URL` points to your backend API URL:
-  - `https://your-backend-service.onrender.com/api`
-4. Redeploy the frontend service.
-
-## 4. Post-deployment checks
+## 3. Post-deployment checks
 
 1. Backend health endpoint:
    - `https://your-render-backend.onrender.com/api/`
@@ -78,7 +64,7 @@ The same [render.yaml](render.yaml) includes a static frontend service:
 3. Login, registration, and CRUD requests succeed.
 4. Browser network tab shows API calls targeting Render URL, not localhost.
 
-## 5. Notes
+## 4. Notes
 
 - API base URL is environment-driven in [frontend/src/api/client.js](frontend/src/api/client.js).
 - CORS and CSRF trusted origins are environment-driven in [backend/hospital_system/settings.py](backend/hospital_system/settings.py).

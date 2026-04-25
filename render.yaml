@@ -2,13 +2,15 @@ services:
   - type: web
     name: hospital-management-backend
     runtime: python
+    rootDir: backend
     plan: free
     region: oregon
     branch: main
     buildCommand: |
-      pip install -r backend/requirements.txt
-      cd backend && python manage.py migrate --noinput && python manage.py collectstatic --noinput
-    startCommand: cd backend && gunicorn hospital_system.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+      pip install -r requirements.txt
+      python manage.py migrate --noinput
+      python manage.py collectstatic --noinput
+    startCommand: gunicorn hospital_system.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     healthCheckPath: /api/
     envVars:
       - key: PYTHON_VERSION
@@ -25,18 +27,4 @@ services:
         value: ^https://.*\.vercel\.app$,^https://.*\.onrender\.com$
       - key: CSRF_TRUSTED_ORIGINS
         value: https://*.vercel.app,https://*.onrender.com
-    autoDeploy: true
-
-  - type: web
-    name: hospital-management-frontend
-    runtime: static
-    plan: free
-    region: oregon
-    branch: main
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_API_BASE_URL
-        value: https://hospital-management-backend.onrender.com/api
     autoDeploy: true

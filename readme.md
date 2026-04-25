@@ -13,7 +13,6 @@ Deployment target: Render (backend + optional frontend static site) or Vercel (f
 
 ### 1. Backend
 ```bash
-You can also deploy the frontend from Render using the `hospital-management-frontend` static service in [render.yaml](render.yaml).
 pip install -r backend/requirements.txt
 cd backend
 python manage.py migrate
