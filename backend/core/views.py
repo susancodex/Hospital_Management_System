@@ -20,6 +20,7 @@ from decimal import Decimal
 from urllib.parse import urlencode
 import uuid
 from .pdf_utils import generate_invoice_pdf, generate_medical_report_pdf
+from django.db import connection
 
 from .models import Doctor, Patient, Appointment, MedicalRecord, MedicalReport, Billing, BillingPayment, User
 from .permissions import RoleActionPermission, get_doctor_profile_for_user, get_patient_profile_for_user
@@ -29,6 +30,31 @@ from .serializers import (
     BillingSerializer, BillingPaymentSerializer, UserSerializer,
     RegisterSerializer, ChangePasswordSerializer, ForgotPasswordSerializer,
 )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def health_check(request):
+    """
+    Health check endpoint for monitoring service availability.
+    Checks API and database connectivity.
+    """
+    try:
+        # Test database connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        
+        return Response({
+            'status': 'healthy',
+            'message': 'Hospital Management System API is running',
+            'database': 'connected',
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            'status': 'unhealthy',
+            'message': f'Health check failed: {str(e)}',
+            'database': 'disconnected',
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 def build_auth_response(user, request):

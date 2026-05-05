@@ -1,0 +1,69 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm
+
+# Frontend build artifacts (we copy dist, not src)
+frontend/node_modules
+frontend/.git
+
+# Django
+*.log
+db.sqlite3
+/static/
+/media/
+.env
+.env.local
+.env.*.local
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Documentation
+*.md
+docs/
+DEPLOYMENT*
+TROUBLESHOOTING*
+CONFIG_VERIFICATION*
+IMMEDIATE_ACTION*
+RENDER_DEPLOYMENT*
+TERMINAL_COMMANDS*
+
+# Tests
+.pytest_cache
+.tox
+coverage.xml
+
+# Build artifacts
+build/
+dist/
+*.egg

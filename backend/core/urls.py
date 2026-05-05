@@ -10,7 +10,7 @@ from .views import (
     forgot_password, change_password, profile, google_login, auth_config,
     download_invoice_pdf, download_medical_report_pdf, billing_dashboard_stats, ai_insights,
     initiate_esewa_payment, esewa_success_callback, esewa_failure_callback,
-    initiate_bank_transfer, verify_billing_payment,
+    initiate_bank_transfer, verify_billing_payment, health_check,
 )
 
 router = DefaultRouter()
@@ -25,6 +25,7 @@ router.register('billing-payments', BillingPaymentViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('health/', health_check, name='health_check'),
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth-config/', auth_config, name='auth_config'),

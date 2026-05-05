@@ -1,0 +1,24 @@
+# docker-compose.override.yml - Local Development Overrides
+# Copy and rename to docker-compose.override.yml to use
+# This file allows you to override production settings for local development
+# Note: This file should NOT be committed to git
+
+version: '3.8'
+
+services:
+  backend:
+    # Enable hot-reload for development
+    volumes:
+      - ./backend:/app/backend
+    environment:
+      DEBUG: "True"  # Enable debug mode
+      PYTHONUNBUFFERED: "1"
+      # Add more overrides as needed
+
+  db:
+    # Keep database data between restarts
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_dev_data:

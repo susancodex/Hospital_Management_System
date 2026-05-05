@@ -1,28 +1,102 @@
-# v0 sandbox internal files
+# =====================================
+# Environment & Secrets
+# =====================================
+.env
+.env.local
+.env.*.local
+.env.prod
+.env.*.prod
+*.pem
+*.key
+
+# =====================================
+# IDE & Editor
+# =====================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-*
+
+# =====================================
+# Python / Django
+# =====================================
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+venv/
+env/
+ENV/
+backend/static/
+backend/media/
+backend/db.sqlite3
+backend/staticfiles/
+*.log
+
+# =====================================
+# Node / Frontend
+# =====================================
+node_modules/
+npm-debug.log
+npm-debug.log.*
+yarn-error.log
+yarn-error.log.*
+frontend/dist/
+frontend/node_modules/
+frontend/.env.local
+frontend/.env.*.local
+
+# =====================================
+# Docker
+# =====================================
+.docker/
+docker-compose.override.yml
+
+# =====================================
+# Vercel & Render
+# =====================================
+.vercel/
+.render/
+.next/
+
+# =====================================
+# OS Specific
+# =====================================
+.DS_Store
+Thumbs.db
+
+# =====================================
+# Sandbox & Development Tools
+# =====================================
 __v0_runtime_loader.js
 __v0_devtools.tsx
 __v0_jsx-dev-runtime.ts
 .snowflake/
 .v0-trash/
-.vercel/
 next.user-config.*
 
-# Environment variables
-.env*.local
+# =====================================
+# Temporary Files
+# =====================================
+*.tmp
+*.temp
+*.bak
+.cache/
 
-# Common ignores
-node_modules
-.next/
-.DS_Store
-dist/
-frontend/dist/
-frontend/node_modules/
-
-# Python
-__pycache__/
-*.py[cod]
-backend/static/
-backend/media/
-
-# Local database
-backend/db.sqlite3
+# =====================================
+# Database
+# =====================================
+*.db
+*.sqlite
+*.sqlite3
+postgres/
