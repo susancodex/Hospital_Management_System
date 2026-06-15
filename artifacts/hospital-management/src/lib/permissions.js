@@ -15,6 +15,7 @@ const ROLE_PERMISSIONS = {
     'billing.view',
     'billing.manage',
     'profile.view',
+    'admin.users',
   ]),
   doctor: new Set([
     'dashboard.view',

@@ -19,6 +19,9 @@ import Profile from './pages/Profile.jsx';
 import Register from './pages/Register.jsx';
 import Prescriptions from './pages/Prescriptions.jsx';
 import AuditLogs from './pages/AuditLogs.jsx';
+import AdminUsers from './pages/AdminUsers.jsx';
+import Availability from './pages/Availability.jsx';
+import Departments from './pages/Departments.jsx';
 
 import { Component } from 'react';
 
@@ -87,6 +90,9 @@ function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/prescriptions" element={<Prescriptions />} />
             <Route path="/audit-logs" element={<AuditLogs />} />
+            <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/availability" element={<Availability />} />
+            <Route path="/departments" element={<Departments />} />
           </Route>
 
           <Route path="/unauthorized" element={<Unauthorized />} />

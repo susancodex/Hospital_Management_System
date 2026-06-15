@@ -18,7 +18,8 @@ const schema = z.object({
   doctor: z.coerce.number().min(1, 'Doctor is required'),
   appointment_date: z.string().min(1, 'Date is required'),
   appointment_time: z.string().optional(),
-  status: z.enum(['scheduled', 'completed', 'cancelled', 'pending']),
+  status: z.enum(['pending', 'confirmed', 'scheduled', 'completed', 'cancelled', 'rejected']),
+  reason: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -548,13 +549,25 @@ export default function Appointments() {
             type="select"
             register={register}
             options={[
-              { value: 'scheduled', label: 'Scheduled' },
               { value: 'pending', label: 'Pending' },
+              { value: 'confirmed', label: 'Confirmed' },
+              { value: 'scheduled', label: 'Scheduled' },
               { value: 'completed', label: 'Completed' },
               { value: 'cancelled', label: 'Cancelled' },
+              { value: 'rejected', label: 'Rejected' },
             ]}
             error={errors.status?.message}
             touched={!!errors.status}
+          />
+          <FormField
+            label="Reason for Visit"
+            name="reason"
+            type="textarea"
+            placeholder="Reason for the appointment…"
+            rows={2}
+            register={register}
+            error={errors.reason?.message}
+            touched={!!errors.reason}
           />
           <FormField
             label="Notes"

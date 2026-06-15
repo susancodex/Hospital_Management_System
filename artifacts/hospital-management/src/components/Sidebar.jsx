@@ -1,4 +1,4 @@
-import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, ChevronLeft, ChevronRight, BrainCircuit, Pill, ShieldCheck, MessageSquare } from 'lucide-react';
+import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, ChevronLeft, ChevronRight, BrainCircuit, Pill, ShieldCheck, MessageSquare, Building2, UserCog, Clock } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { hasPermission } from '../lib/permissions.js';
@@ -9,18 +9,21 @@ const menuConfig = {
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
     { label: 'Patients', path: '/patients', icon: Users, permission: 'patients.view' },
     { label: 'Doctors', path: '/doctors', icon: Stethoscope, permission: 'doctors.view' },
+    { label: 'Departments', path: '/departments', icon: Building2, permission: 'doctors.view' },
     { label: 'Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
     { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
     { label: 'Prescriptions', path: '/prescriptions', icon: Pill, permission: 'medicalRecords.view' },
     { label: 'AI Centre', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
+    { label: 'User Accounts', path: '/admin/users', icon: UserCog, permission: 'admin.users' },
     { label: 'Audit Logs', path: '/audit-logs', icon: ShieldCheck, permission: 'aiInsights.view' },
   ],
   doctor: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
     { label: 'My Patients', path: '/patients', icon: Users, permission: 'patients.view' },
     { label: 'Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
+    { label: 'My Availability', path: '/availability', icon: Clock, permission: 'appointments.view' },
     { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
     { label: 'Prescriptions', path: '/prescriptions', icon: Pill, permission: 'medicalRecords.view' },
@@ -30,7 +33,8 @@ const menuConfig = {
   patient: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
     { label: 'My Record', path: '/patients', icon: Users, permission: 'patients.view' },
-    { label: 'Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
+    { label: 'My Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
+    { label: 'Find Doctors', path: '/doctors', icon: Stethoscope, permission: 'patients.view' },
     { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },
     { label: 'My Prescriptions', path: '/prescriptions', icon: Pill, permission: 'medicalRecords.view' },
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },

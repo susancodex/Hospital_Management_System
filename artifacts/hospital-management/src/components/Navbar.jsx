@@ -1,8 +1,8 @@
 import { Bell, ChevronDown, LogOut, Menu, Search, User } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { patientsAPI } from '../api/services.js';
+import { patientsAPI, notificationsAPI } from '../api/services.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useDebounce } from '../hooks/useDebounce.js';
 import { useUIStore } from '../store/uiStore.js';
@@ -17,15 +17,15 @@ const pageTitles = {
   '/medical-reports': 'Medical Reports',
   '/billing': 'Billing',
   '/profile': 'Profile',
+  '/ai-triage': 'AI Centre',
+  '/prescriptions': 'Prescriptions',
+  '/audit-logs': 'Audit Logs',
+  '/admin/users': 'User Management',
+  '/availability': 'My Availability',
+  '/departments': 'Departments',
 };
 
 const roleLabels = { admin: 'Administrator', doctor: 'Doctor', patient: 'Patient', reception: 'Receptionist' };
-
-const buildNotifications = (user) => [
-  { id: 1, title: 'Profile synced', detail: `Signed in as ${roleLabels[user?.role] || 'User'}.`, unread: true },
-  { id: 2, title: 'Theme preferences', detail: 'Your appearance settings now persist across pages.', unread: true },
-  { id: 3, title: 'System status', detail: 'Hospital dashboard services are online.', unread: false },
-];
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -34,7 +34,8 @@ export default function Navbar() {
   const { openMobileSidebar, search, setSearch } = useUIStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState(() => buildNotifications(user));
+  const [notifications, setNotifications] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -43,6 +44,26 @@ export default function Navbar() {
   const debounced = useDebounce(search, 300);
 
   const pageTitle = useMemo(() => pageTitles[location.pathname] || 'AetherCare', [location.pathname]);
+
+  const loadNotifications = useCallback(async () => {
+    if (!user) return;
+    setNotifLoading(true);
+    try {
+      const res = await notificationsAPI.list();
+      setNotifications(res.data?.results || []);
+    } catch {
+      // graceful failure — don't show error for notification refresh
+    } finally {
+      setNotifLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadNotifications();
+    // Refresh every 60 seconds while page is open
+    const interval = setInterval(loadNotifications, 60000);
+    return () => clearInterval(interval);
+  }, [loadNotifications]);
 
   useEffect(() => {
     const onClick = (e) => {
@@ -53,10 +74,6 @@ export default function Navbar() {
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
-
-  useEffect(() => {
-    setNotifications(buildNotifications(user));
-  }, [user]);
 
   useEffect(() => {
     setDropdownOpen(false);
@@ -83,8 +100,25 @@ export default function Navbar() {
     navigate('/login');
   };
 
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationsAPI.markRead();
+      setNotifications((items) => items.map((n) => ({ ...n, is_read: true })));
+    } catch {
+      toast.error('Failed to mark notifications as read');
+    }
+  };
+
+  const handleMarkOneRead = async (notif) => {
+    if (notif.is_read) return;
+    try {
+      await notificationsAPI.markRead([notif.id]);
+      setNotifications((items) => items.map((n) => n.id === notif.id ? { ...n, is_read: true } : n));
+    } catch {}
+  };
+
   const initials = (user?.username || 'U').slice(0, 2).toUpperCase();
-  const unreadCount = notifications.filter((item) => item.unread).length;
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   return (
     <header className="sticky top-0 z-40 h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
@@ -98,10 +132,7 @@ export default function Navbar() {
           <Menu size={18} />
         </button>
 
-        {/* Page title (mobile) / Search (desktop) */}
-        <h1 className="lg:hidden text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
-          {pageTitle}
-        </h1>
+        <h1 className="lg:hidden text-base font-semibold text-slate-900 dark:text-slate-100 truncate">{pageTitle}</h1>
 
         <div className="hidden lg:block relative w-96 max-w-md" ref={searchRef}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -114,23 +145,23 @@ export default function Navbar() {
                 setSearchResults([]);
               }
             }}
-            placeholder="Search patients, MRN, doctors…"
+            placeholder="Search patients, doctors…"
             className="h-9 w-full pl-9 pr-3 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
           />
           {searchResults.length > 0 && (
-            <div className="absolute left-0 right-0 top-11 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden">
+            <div className="absolute left-0 right-0 top-11 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden z-50">
               {searchResults.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => {
-                    navigate(`/patients?q=${encodeURIComponent(p.full_name || `${p.first_name} ${p.last_name}`)}`);
+                    navigate(`/patients?q=${encodeURIComponent(`${p.first_name} ${p.last_name}`)}`);
                     setSearchResults([]);
                   }}
                   className="w-full flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  <span className="text-slate-700 dark:text-slate-200">{p.full_name || `${p.first_name} ${p.last_name}`}</span>
-                  <span className="text-xs text-slate-400 font-mono">{p.phone || ''}</span>
+                  <span className="text-slate-700 dark:text-slate-200">{p.first_name} {p.last_name}</span>
+                  <span className="text-xs text-slate-400 font-mono">{p.email || ''}</span>
                 </button>
               ))}
             </div>
@@ -149,52 +180,56 @@ export default function Navbar() {
 
           <ThemeToggle />
 
+          {/* Notifications */}
           <div className="relative" ref={notificationsRef}>
             <button
               type="button"
-              onClick={() => setNotificationsOpen((open) => !open)}
+              onClick={() => { setNotificationsOpen((o) => !o); if (!notificationsOpen) loadNotifications(); }}
               className="relative inline-flex items-center justify-center h-9 w-9 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               title="Notifications"
             >
               <Bell size={18} />
               {unreadCount > 0 && (
                 <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] leading-4 text-center">
-                  {unreadCount}
+                  {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
             {notificationsOpen && (
-              <div className="absolute right-0 top-11 w-72 sm:w-80 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+              <div className="absolute right-0 top-11 w-72 sm:w-80 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden z-50">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                   <div>
                     <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Notifications</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">{unreadCount} unread</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setNotifications((items) => items.map((item) => ({ ...item, unread: false })))}
-                    className="text-xs font-medium text-teal-700 dark:text-teal-400 hover:underline"
-                  >
-                    Mark all read
-                  </button>
+                  {unreadCount > 0 && (
+                    <button type="button" onClick={handleMarkAllRead} className="text-xs font-medium text-teal-700 dark:text-teal-400 hover:underline">
+                      Mark all read
+                    </button>
+                  )}
                 </div>
                 <div className="max-h-80 overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-                      No notifications right now.
+                  {notifLoading ? (
+                    <div className="px-4 py-8 flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
                     </div>
-                  ) : notifications.map((item) => (
+                  ) : notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">No notifications right now.</div>
+                  ) : notifications.map((notif) => (
                     <button
-                      key={item.id}
+                      key={notif.id}
                       type="button"
-                      onClick={() => setNotifications((items) => items.map((entry) => entry.id === item.id ? { ...entry, unread: false } : entry))}
-                      className="w-full text-left px-4 py-3 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                      onClick={() => handleMarkOneRead(notif)}
+                      className={`w-full text-left px-4 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors ${!notif.is_read ? 'bg-teal-50/30 dark:bg-teal-950/20' : ''}`}
                     >
                       <div className="flex items-start gap-3">
-                        <span className={`mt-1 h-2.5 w-2.5 rounded-full ${item.unread ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
-                        <div>
-                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.title}</p>
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{item.detail}</p>
+                        <span className={`mt-1 h-2.5 w-2.5 rounded-full shrink-0 ${!notif.is_read ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{notif.title}</p>
+                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{notif.message}</p>
+                          <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+                            {notif.created_at ? new Date(notif.created_at).toLocaleString() : ''}
+                          </p>
                         </div>
                       </div>
                     </button>
@@ -224,10 +259,10 @@ export default function Navbar() {
             </button>
 
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-56 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1 animate-rise">
+              <div className="absolute right-0 mt-2 w-56 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1 z-50">
                 <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800">
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{user?.username}</p>
-                  <p className="text-xs text-slate-500">{roleLabels[user?.role] || user?.role}</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{user?.first_name} {user?.last_name}</p>
+                  <p className="text-xs text-slate-500">@{user?.username} · {roleLabels[user?.role] || user?.role}</p>
                 </div>
                 <button
                   onClick={() => { setDropdownOpen(false); navigate('/profile'); }}
@@ -254,7 +289,7 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile search drawer */}
+      {/* Mobile search */}
       {mobileSearchOpen && (
         <div className="lg:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
           <div className="relative">

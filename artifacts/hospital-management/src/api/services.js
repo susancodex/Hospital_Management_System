@@ -180,3 +180,24 @@ export const aiAPI = {
   doctorAssistant: (data) => apiClient.post('/ai/doctor-assistant/', data),
   summarizeReport: (data) => apiClient.post('/ai/summarize-report/', data),
 };
+
+export const usersAdminAPI = {
+  list: (params) => apiClient.get(`/users/${toQueryParams(params)}`),
+  create: (data) => apiClient.post('/users/', data),
+  retrieve: (id) => apiClient.get(`/users/${id}/`),
+  update: (id, data) => apiClient.patch(`/users/${id}/`, data),
+  toggleActive: (id) => apiClient.post(`/users/${id}/toggle-active/`),
+  resetPassword: (id, new_password) => apiClient.post(`/users/${id}/reset-password/`, { new_password }),
+  delete: (id) => apiClient.delete(`/users/${id}/`),
+};
+
+export const availabilityAPI = {
+  list: (params) => apiClient.get(`/availability/${toQueryParams(params)}`),
+  create: (data) => apiClient.post('/availability/', data),
+  delete: (id) => apiClient.delete(`/availability/${id}/`),
+  getSlots: (doctor_id, date) => apiClient.get(`/availability/slots/?doctor_id=${doctor_id}&date=${date}`),
+};
+
+export const statsAPI = {
+  get: () => apiClient.get('/stats/'),
+};

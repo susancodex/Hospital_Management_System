@@ -10,6 +10,9 @@ import aiRouter from "./ai";
 import prescriptionsRouter from "./prescriptions";
 import notificationsRouter from "./notifications";
 import auditRouter from "./audit";
+import usersRouter from "./users";
+import availabilityRouter from "./availability";
+import statsRouter from "./stats";
 
 const router: IRouter = Router();
 
@@ -24,5 +27,8 @@ router.use(aiRouter);
 router.use(prescriptionsRouter);
 router.use(notificationsRouter);
 router.use(auditRouter);
+router.use(usersRouter);
+router.use(availabilityRouter);
+router.use(statsRouter);
 
 export default router;
