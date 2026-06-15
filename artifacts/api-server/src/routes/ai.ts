@@ -1,4 +1,5 @@
 import { Router } from "express";
+import OpenAI from "openai";
 import { db, appointmentsTable, usersTable, patientsTable, doctorsTable, medicalRecordsTable, prescriptionsTable, labOrdersTable, labResultsTable } from "@workspace/db";
 import { count, eq, desc, and, gte } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
@@ -27,12 +28,7 @@ syncConfiguredFlags();
 
 function getAIClient(apiKey: string, baseURL?: string) {
   if (!apiKey) return null;
-  try {
-    const OpenAI = require("openai");
-    return new OpenAI.default({ apiKey, baseURL, timeout: 20_000, maxRetries: 0 });
-  } catch {
-    return null;
-  }
+  return new OpenAI({ apiKey, baseURL, timeout: 20_000, maxRetries: 0 });
 }
 
 function classifyError(err: any): ProviderError["reason"] {
