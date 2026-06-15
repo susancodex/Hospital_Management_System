@@ -29,6 +29,8 @@ import Monitoring from './pages/Monitoring.jsx';
 import VerifyPrescription from './pages/VerifyPrescription.jsx';
 import Insurance from './pages/Insurance.jsx';
 import SubscriptionPlans from './pages/SubscriptionPlans.jsx';
+import Telemedicine from './pages/Telemedicine.jsx';
+import Backup from './pages/Backup.jsx';
 
 import { Component } from 'react';
 
@@ -106,6 +108,8 @@ function App() {
             <Route path="/monitoring" element={<Monitoring />} />
             <Route path="/insurance" element={<Insurance />} />
             <Route path="/subscription-plans" element={<SubscriptionPlans />} />
+            <Route path="/telemedicine" element={<Telemedicine />} />
+            <Route path="/backup" element={<Backup />} />
           </Route>
 
           <Route path="/verify-rx/:token" element={<VerifyPrescription />} />

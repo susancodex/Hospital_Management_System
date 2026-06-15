@@ -19,6 +19,8 @@ import exportRouter from "./export";
 import qrRouter from "./qr";
 import insuranceRouter from "./insurance";
 import subscriptionsRouter from "./subscriptions";
+import telemedicineRouter from "./telemedicine";
+import backupRouter from "./backup";
 
 const router: IRouter = Router();
 
@@ -42,5 +44,7 @@ router.use(exportRouter);
 router.use(qrRouter);
 router.use(insuranceRouter);
 router.use(subscriptionsRouter);
+router.use(telemedicineRouter);
+router.use(backupRouter);
 
 export default router;

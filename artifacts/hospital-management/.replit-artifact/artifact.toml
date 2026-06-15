@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "Hospital Management System"
+title = "AetherCare HMS"
 version = "1.0.0"
 id = "artifacts/hospital-management"
 router = "path"

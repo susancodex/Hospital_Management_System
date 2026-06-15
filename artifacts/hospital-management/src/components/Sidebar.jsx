@@ -1,4 +1,4 @@
-import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, ChevronLeft, ChevronRight, BrainCircuit, Pill, ShieldCheck, MessageSquare, Building2, UserCog, Clock, CalendarPlus, FlaskConical, Package, Gauge, HeartHandshake, Crown } from 'lucide-react';
+import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, ChevronLeft, ChevronRight, BrainCircuit, Pill, ShieldCheck, MessageSquare, Building2, UserCog, Clock, CalendarPlus, FlaskConical, Package, Gauge, HeartHandshake, Crown, Video, HardDrive } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { hasPermission } from '../lib/permissions.js';
@@ -23,6 +23,8 @@ const menuConfig = {
     { label: 'Audit Logs', path: '/audit-logs', icon: ShieldCheck, permission: 'aiInsights.view' },
     { label: 'Subscriptions', path: '/subscription-plans', icon: Crown, permission: 'admin.users' },
     { label: 'Monitoring', path: '/monitoring', icon: Gauge, permission: 'admin.users' },
+    { label: 'Telemedicine', path: '/telemedicine', icon: Video, permission: 'admin.users' },
+    { label: 'Backup & DR', path: '/backup', icon: HardDrive, permission: 'admin.users' },
   ],
   doctor: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
@@ -34,6 +36,7 @@ const menuConfig = {
     { label: 'Prescriptions', path: '/prescriptions', icon: Pill, permission: 'medicalRecords.view' },
     { label: 'Lab Orders', path: '/lab-orders', icon: FlaskConical, permission: 'labOrders.view' },
     { label: 'AI Assistant', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
+    { label: 'Telemedicine', path: '/telemedicine', icon: Video, permission: 'appointments.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
   ],
   nurse: [
@@ -81,6 +84,7 @@ const menuConfig = {
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
     { label: 'My Lab Orders', path: '/lab-orders', icon: FlaskConical, permission: 'labOrders.view' },
     { label: 'Health Assistant', path: '/ai-triage', icon: MessageSquare, permission: 'dashboard.view' },
+    { label: 'Telemedicine', path: '/telemedicine', icon: Video, permission: 'appointments.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
   ],
   reception: [

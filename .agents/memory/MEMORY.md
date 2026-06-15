@@ -2,4 +2,5 @@
 - [RBAC security decisions](rbac-decisions.md) — Self-registration is always locked to role=patient server-side. JWT_SECRET throws at production startup if absent.
 - [Lab & Pharmacy modules](lab-pharmacy-modules.md) — Full clinical modules added (lab orders, pharmacy inventory, dispensing); schema, backend routes, and frontend pages all in place.
 - [AI multi-provider cascade](ai-providers.md) — Gemini → Groq → OpenRouter → OpenAI failover; all use OpenAI SDK with different baseURL. Models: gemini-2.5-flash, llama-3.3-70b-versatile, meta-llama/llama-3.3-70b-instruct, gpt-4o-mini.
-- [Enterprise features](enterprise-features.md) — 15 enterprise features shipped: WebSocket, HIPAA/helmet, QR Rx, PDF/CSV export, i18n EN/NE, BS/AD dates, voice transcription, insurance CRUD, monitoring dashboard, multi-hospital schema.
+- [Enterprise features](enterprise-features.md) — 17 enterprise features shipped: WebSocket, HIPAA/helmet, QR Rx, PDF/CSV export, i18n EN/NE, BS/AD dates, voice transcription, insurance CRUD, monitoring dashboard, multi-hospital schema, telemedicine (Jitsi), backup/DR export.
+- [Workflow & artifact setup](workflow-artifact-setup.md) — Frontend on port 20044 (BASE_PATH=/), API on port 8080 (/api). artifact.toml exists in .replit-artifact/. Use verifyAndReplaceArtifactToml to re-register if listArtifacts() returns empty.
