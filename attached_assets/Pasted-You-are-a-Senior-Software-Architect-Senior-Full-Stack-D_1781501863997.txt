@@ -1,0 +1,385 @@
+You are a Senior Software Architect, Senior Full-Stack Developer, QA Engineer, Product Manager, Healthcare Workflow Consultant, Security Engineer, and UI/UX Designer.
+Repository:
+
+https://github.com/susancodex/Hospital_Management_System.git
+
+Your task is NOT to make small edits.
+Perform a complete software audit and redesign of the entire Hospital Management System.
+
+CRITICAL RULE
+DO NOT DO VIBE CODING.
+Before changing anything:
+1. Analyze the complete codebase.
+2. Understand existing architecture.
+3. Find all bugs.
+4. Find security issues.
+5. Find missing healthcare workflows.
+6. Find role permission issues.
+7. Find database design issues.
+8. Find UI/UX problems.
+9. Find scalability issues.
+10. Create a development plan.
+11. Then implement improvements.
+
+PROJECT GOAL
+Transform this project into a real-world professional Hospital Management System suitable for:
+* Final Year Project
+* Portfolio Project
+* Internship Demonstration
+* Startup MVP
+* Production-ready Architecture Showcase
+
+ROLE SYSTEM REDESIGN
+Implement strict Role Based Access Control (RBAC).
+There must be 3 roles:
+1. Admin
+Full System Access
+Admin can:
+* Dashboard overview
+* Manage doctors
+* Manage patients
+* Manage appointments
+* Manage departments
+* Manage schedules
+* Manage hospital staff
+* Manage system settings
+* Manage AI settings
+* Manage user accounts
+* View analytics
+* View reports
+* Export reports
+* Block users
+* Reset passwords
+* Monitor system activity
+* Audit logs
+Admin must NOT use patient features directly.
+
+2. Doctor
+Doctor can:
+* Login
+* View dashboard
+* View own patients
+* View appointments
+* Manage appointment status
+* Create prescriptions
+* Add diagnoses
+* Add treatment plans
+* Upload medical reports
+* View patient history
+* Schedule availability
+* AI-assisted diagnosis suggestions
+* AI-assisted treatment recommendations
+Doctor must NOT:
+* Manage other doctors
+* Access admin panel
+* Change system settings
+
+3. Patient
+Patient can:
+* Register
+* Login
+* Manage profile
+* Book appointment
+* Reschedule appointment
+* Cancel appointment
+* View prescriptions
+* View reports
+* View medical history
+* Download reports
+* Chat with AI health assistant
+* Receive reminders
+Patient must NOT:
+* Access admin panel
+* Access doctor data
+* Access other patient data
+
+ROLE ACCESS VALIDATION
+Check every route.
+Check every API.
+Check every page.
+Check every button.
+Check every database operation.
+Ensure role permissions are enforced both:
+* Frontend
+* Backend
+No access bypass should be possible.
+
+DATABASE AUDIT
+Review current database structure.
+Normalize tables.
+Create proper relations.
+Suggested entities:
+Users
+* id
+* name
+* email
+* password
+* role
+Patients
+* patient_id
+* user_id
+* DOB
+* blood_group
+* address
+* emergency_contact
+Doctors
+* doctor_id
+* user_id
+* specialization
+* department
+Appointments
+* appointment_id
+* patient_id
+* doctor_id
+* date
+* time
+* status
+Prescriptions
+* prescription_id
+* doctor_id
+* patient_id
+Medical Records
+* diagnosis
+* treatment
+* reports
+Notifications
+Audit Logs
+AI Interactions
+Create proper foreign keys.
+Create indexes.
+Improve query performance.
+
+SECURITY IMPROVEMENTS
+Implement:
+Authentication
+* JWT
+* Secure Sessions
+* Refresh Tokens
+Authorization
+* RBAC Middleware
+Password Security
+* bcrypt
+Validation
+* Frontend validation
+* Backend validation
+Protection
+* SQL Injection protection
+* XSS protection
+* CSRF protection
+* Rate limiting
+Logging
+* Security logs
+* Login activity logs
+
+APPOINTMENT SYSTEM REDESIGN
+Current appointment workflow should be reviewed completely.
+Implement:
+Appointment Status
+* Pending
+* Confirmed
+* Completed
+* Cancelled
+* Rejected
+Doctor Availability
+Doctors set available slots.
+Patients only book available slots.
+Prevent:
+* Double booking
+* Time conflicts
+
+PRESCRIPTION SYSTEM
+Doctors can:
+* Generate prescription
+* Save prescription
+* Print prescription
+Prescription contains:
+* Medicines
+* Dosage
+* Duration
+* Instructions
+Patient can:
+* View
+* Download PDF
+
+MEDICAL HISTORY
+Patient profile should maintain:
+* Diagnoses
+* Reports
+* Prescriptions
+* Treatments
+* Appointment history
+Complete timeline view.
+
+NOTIFICATION SYSTEM
+Implement:
+Email Notifications
+* Registration
+* Appointment booking
+* Appointment approval
+* Appointment cancellation
+In-App Notifications
+For all users.
+
+DASHBOARD REDESIGN
+Create modern dashboards.
+Admin Dashboard
+* Total Doctors
+* Total Patients
+* Total Appointments
+* Revenue Metrics
+* Activity Logs
+Doctor Dashboard
+* Today's Appointments
+* Pending Patients
+* AI Insights
+Patient Dashboard
+* Upcoming Appointment
+* Prescriptions
+* Medical Records
+
+UI/UX IMPROVEMENTS
+Redesign whole interface.
+Requirements:
+* Modern Healthcare Theme
+* Responsive
+* Mobile Friendly
+* Professional Design
+* Accessibility
+* Clean Navigation
+* Better Forms
+* Better Tables
+* Better Search
+No generic bootstrap-looking pages.
+Make it look like a startup SaaS product.
+
+AI FEATURES (AGENTIC AI)
+Add meaningful AI features.
+Do NOT add gimmicks.
+
+AI Health Assistant
+Patient chatbot:
+Can answer:
+* Hospital FAQs
+* Appointment help
+* General wellness guidance
+Cannot:
+* Give final diagnosis
+Must show disclaimer.
+
+AI Symptom Analyzer
+Patient enters:
+* Symptoms
+AI returns:
+* Possible conditions
+* Risk level
+* Recommendation
+Output:
+"Consult a doctor"
+Not medical advice.
+
+AI Doctor Assistant
+Doctor dashboard:
+AI helps:
+* Summarize patient history
+* Generate clinical notes
+* Suggest diagnosis possibilities
+* Suggest treatment references
+Doctor always approves final result.
+
+AI Appointment Agent
+Automatically:
+* Suggest available doctors
+* Recommend slots
+* Optimize scheduling
+
+AI Medical Report Summarizer
+Upload report.
+AI creates:
+* Patient-friendly summary
+* Doctor summary
+
+AI Smart Search
+Search:
+* Patient records
+* Doctors
+* Appointments
+Using natural language.
+Example:
+
+Show all diabetic patients
+
+
+AUDIT SYSTEM
+Implement:
+Activity Logs
+Track:
+* Login
+* Logout
+* Create
+* Update
+* Delete
+Store:
+* User
+* Action
+* Timestamp
+
+REPORTING
+Admin can export:
+PDF
+* Patients
+* Doctors
+* Appointments
+Excel
+* Analytics
+* Reports
+
+TESTING
+Create:
+Unit Tests
+Integration Tests
+Role Permission Tests
+Security Tests
+Appointment Tests
+API Tests
+
+CODE QUALITY
+Refactor entire codebase.
+Requirements:
+* Clean Architecture
+* Reusable Components
+* Service Layer
+* Controller Layer
+* Middleware Layer
+* Repository Layer
+Remove:
+* Duplicate Code
+* Dead Code
+* Unused Files
+* Hardcoded Values
+
+DOCUMENTATION
+Generate:
+README
+Include:
+* Architecture
+* Setup
+* Features
+* API Endpoints
+* User Roles
+* AI Features
+ER Diagram
+Database Schema
+API Documentation
+
+FINAL DELIVERABLE
+Provide:
+1. Complete project audit report.
+2. List of all bugs fixed.
+3. List of security improvements.
+4. List of database improvements.
+5. List of role access improvements.
+6. List of AI features added.
+7. Updated architecture diagram.
+8. Production deployment guide.
+9. Fully working Hospital Management System.
+Do not stop after partial implementation. Review every page, API, model, database table, workflow, role permission, and user journey until the system behaves like a real hospital application rather than a student project.
