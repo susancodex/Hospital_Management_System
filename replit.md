@@ -1,44 +1,68 @@
-# [Project name]
+# Hospital Management System
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A full-stack hospital management platform with role-based access control for admins, doctors, and patients — featuring appointments, medical records, billing, and AI triage.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
+- Workflows auto-start both services (frontend + API server)
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env: `DATABASE_URL` — Postgres connection string (auto-provisioned)
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
+- Frontend: React 19 + Vite + React Router v7 + Tailwind CSS v4 + Zustand
+- API: Express 5 + JWT auth (bcrypt + jsonwebtoken)
 - DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Build: esbuild (API), Vite (frontend)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/hospital-management/src/` — React frontend (pages, components, hooks, store)
+- `artifacts/hospital-management/src/api/` — Axios API client (`client.js`) + services (`services.js`)
+- `artifacts/hospital-management/src/styles/` — CSS files (tailwind v4, dark mode, layouts)
+- `artifacts/api-server/src/routes/` — Express route files (auth, doctors, patients, appointments, medical, billing, ai)
+- `artifacts/api-server/src/lib/auth.ts` — JWT generation, verification, requireAuth middleware
+- `lib/db/src/schema/hospital.ts` — Drizzle schema (all tables)
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Frontend uses Zustand for auth state (localStorage-backed JWT tokens, hydration on mount)
+- API client calls `/api/*` — the Replit shared proxy routes `/api` to the Express server
+- JWT secret defaults to a dev fallback; set `JWT_SECRET` env var for production
+- All frontend packages in `devDependencies` (static Vite build bundles everything)
+- React deduplication via `vite.config.ts` dedupe: `["react", "react-dom", "zustand"]`
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- **Landing page** — public marketing page with "Sign in" / "Get started"
+- **Auth** — register (admin/doctor/patient roles), login, forgot password
+- **Dashboard** — role-aware stats and overview
+- **Patients** — CRUD for patient records, search
+- **Doctors** — CRUD for doctor profiles with specialization/department
+- **Appointments** — book, manage status (pending/confirmed/completed/cancelled)
+- **Medical Records** — diagnoses, treatments, prescriptions
+- **Medical Reports** — file uploads and summaries
+- **Billing** — invoices and payment tracking
+- **AI Triage** — AI health assistant page
 
-## User preferences
+## Demo credentials
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+All demo accounts use password: `admin123`
+
+| Username | Role | Email |
+|---|---|---|
+| admin | admin | admin@hospital.com |
+| dr.smith | doctor | smith@hospital.com |
+| dr.johnson | doctor | johnson@hospital.com |
+| patient1 | patient | patient1@example.com |
+| patient2 | patient | patient2@example.com |
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Frontend API base URL: `/api` (no need to configure; proxy handles it)
+- The `zustand` duplicate React issue is fixed via `dedupe` in `vite.config.ts`
+- `pnpm dev` at workspace root will fail — run workflows instead
 
 ## Pointers
 

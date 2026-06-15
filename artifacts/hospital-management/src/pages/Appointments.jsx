@@ -1,0 +1,632 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Plus, CalendarDays, Download, Eye, CheckCircle2, Ban } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
+import { z } from 'zod';
+import { appointmentsAPI, doctorsAPI, patientsAPI } from '../api/services.js';
+import AppModal from '../components/common/AppModal.jsx';
+import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx';
+import PageHeader from '../components/common/PageHeader.jsx';
+import StatusBadge from '../components/common/StatusBadge.jsx';
+import { FormField, ConfirmDialog } from '../components/common/UIStates.jsx';
+import { useAuth } from '../hooks/useAuth.js';
+import { hasPermission } from '../lib/permissions.js';
+
+const schema = z.object({
+  patient: z.coerce.number().min(1, 'Patient is required'),
+  doctor: z.coerce.number().min(1, 'Doctor is required'),
+  appointment_date: z.string().min(1, 'Date is required'),
+  appointment_time: z.string().optional(),
+  status: z.enum(['scheduled', 'completed', 'cancelled', 'pending']),
+  notes: z.string().optional(),
+});
+
+export default function Appointments() {
+  const { user } = useAuth();
+  const canManageAppointments = hasPermission(user?.role, 'appointments.manage');
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [viewing, setViewing] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  
+  const [deleteId, setDeleteId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [filterPatient, setFilterPatient] = useState('');
+  const [filterDoctor, setFilterDoctor] = useState('');
+  const [dateFilter, setDateFilter] = useState('all');
+
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { status: 'scheduled' },
+  });
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (filterPatient) params.patient = filterPatient;
+      if (filterDoctor) params.doctor = filterDoctor;
+      
+      // Simple client-side date filtering below since API might not support these exact text params
+      // but we will fetch all matching patient/doctor and filter in memory if needed for 'dateFilter'
+      
+      const results = await Promise.allSettled([
+        appointmentsAPI.list(params),
+        patientsAPI.list(),
+        doctorsAPI.list()
+      ]);
+
+      if (results[0].status !== 'fulfilled') {
+        throw results[0].reason;
+      }
+
+      setRows(results[0].value.items || []);
+      setPatients(results[1].status === 'fulfilled' ? (results[1].value.items || []) : []);
+      setDoctors(results[2].status === 'fulfilled' ? (results[2].value.items || []) : []);
+    } catch {
+      toast.error('Failed to load appointments');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [filterPatient, filterDoctor]);
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [filterPatient, filterDoctor, dateFilter]);
+
+  const openCreate = () => {
+    setEditing(null);
+    reset({ patient: '', doctor: '', appointment_date: '', appointment_time: '', status: 'scheduled', notes: '' });
+    setOpen(true);
+  };
+
+  const openEdit = (row) => {
+    setEditing(row);
+    reset({
+      patient: row.patient,
+      doctor: row.doctor,
+      appointment_date: row.appointment_date,
+      appointment_time: row.appointment_time || '',
+      status: row.status,
+      notes: row.notes || ''
+    });
+    setOpen(true);
+  };
+
+  const onSubmit = async (values) => {
+    try {
+      if (editing) {
+        await appointmentsAPI.update(editing.id, values);
+        toast.success('Appointment updated');
+      } else {
+        await appointmentsAPI.create(values);
+        toast.success('Appointment created');
+      }
+      setOpen(false);
+      await load();
+    } catch {
+      toast.error('Unable to save appointment');
+    }
+  };
+
+  const confirmDelete = (id) => setDeleteId(id);
+
+  const toggleSelect = (id) => {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
+  };
+
+  const toggleSelectAllVisible = () => {
+    const visibleIds = filteredRows.map((row) => row.id);
+    if (!visibleIds.length) return;
+    const allSelected = visibleIds.every((id) => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds((current) => current.filter((id) => !visibleIds.includes(id)));
+      return;
+    }
+    setSelectedIds((current) => Array.from(new Set([...current, ...visibleIds])));
+  };
+
+  const updatePayloadFor = (row, status) => ({
+    patient: row.patient,
+    doctor: row.doctor,
+    appointment_date: row.appointment_date,
+    appointment_time: row.appointment_time || '',
+    status,
+    notes: row.notes || '',
+  });
+
+  const handleBulkStatus = async (status) => {
+    if (!selectedIds.length) {
+      toast.error('Select at least one appointment first');
+      return;
+    }
+
+    const targets = filteredRows.filter((row) => selectedIds.includes(row.id));
+    if (!targets.length) {
+      toast.error('No matching selected appointments in current view');
+      return;
+    }
+
+    try {
+      await Promise.all(
+        targets.map((row) => appointmentsAPI.update(row.id, updatePayloadFor(row, status)))
+      );
+      toast.success(`${targets.length} appointment${targets.length > 1 ? 's' : ''} marked as ${status}`);
+      setSelectedIds([]);
+      await load();
+    } catch {
+      toast.error('Unable to update selected appointments');
+    }
+  };
+
+  const handleQuickStatus = async (row, status) => {
+    try {
+      await appointmentsAPI.update(row.id, { ...row, status });
+      toast.success(`Appointment marked as ${status}`);
+      await load();
+    } catch {
+      toast.error('Unable to update appointment status');
+    }
+  };
+  
+  const onDelete = async () => {
+    if (!deleteId) return;
+    setIsDeleting(true);
+    try {
+      await appointmentsAPI.delete(deleteId);
+      toast.success('Appointment deleted');
+      await load();
+    } catch {
+      toast.error('Unable to delete appointment');
+    } finally {
+      setIsDeleting(false);
+      setDeleteId(null);
+    }
+  };
+
+  const filteredRows = rows.filter(row => {
+    if (dateFilter === 'all') return true;
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    
+    if (dateFilter === 'today') return row.appointment_date === today;
+    if (dateFilter === 'tomorrow') return row.appointment_date === tomorrow;
+    if (dateFilter === 'week') {
+      const rowDate = new Date(row.appointment_date);
+      const now = new Date();
+      const diffTime = Math.abs(rowDate - now);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 7 && rowDate >= new Date(today);
+    }
+    return true;
+  });
+
+  const escapeCsv = (value) => {
+    const text = value == null ? '' : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
+  const handleExport = () => {
+    if (!filteredRows.length) {
+      toast.error('No appointments to export');
+      return;
+    }
+
+    const header = ['Appointment ID', 'Date', 'Time', 'Patient', 'Doctor', 'Status', 'Notes'];
+    const lines = filteredRows.map((row) => [
+      row.id,
+      row.appointment_date || '',
+      row.appointment_time || '',
+      row.patient_name || '',
+      row.doctor_name || '',
+      row.status || '',
+      row.notes || '',
+    ]);
+
+    const csv = [header, ...lines].map((cols) => cols.map(escapeCsv).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `appointments-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast.success('Appointments export downloaded');
+  };
+
+  return (
+    <div className="space-y-6 max-w-[1400px] mx-auto w-full">
+      <PageHeader
+        title="Appointments"
+        subtitle="Manage consultations and schedules"
+        actions={
+          <>
+            <button
+              onClick={handleExport}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium shadow-sm transition-colors"
+            >
+              <Download className="w-4 h-4" /> Export
+            </button>
+            {canManageAppointments ? (
+              <button
+                onClick={openCreate}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium shadow-sm transition-colors"
+              >
+                <Plus className="w-4 h-4" /> New Appointment
+              </button>
+            ) : null}
+          </>
+        }
+      />
+
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        {canManageAppointments ? (
+          <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60 dark:bg-slate-900/40">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              {selectedIds.length} selected
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleBulkStatus('completed')}
+                disabled={!selectedIds.length}
+                className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-xs font-medium text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" /> Mark Completed
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBulkStatus('cancelled')}
+                disabled={!selectedIds.length}
+                className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-xs font-medium text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-50"
+              >
+                <Ban className="w-3.5 h-3.5" /> Mark Cancelled
+              </button>
+            </div>
+          </div>
+        ) : null}
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setDateFilter('all')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${dateFilter === 'all' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setDateFilter('today')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${dateFilter === 'today' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setDateFilter('tomorrow')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${dateFilter === 'tomorrow' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              Tomorrow
+            </button>
+            <button
+              onClick={() => setDateFilter('week')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${dateFilter === 'week' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              This week
+            </button>
+          </div>
+          <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <select
+              value={filterPatient}
+              onChange={(e) => setFilterPatient(e.target.value)}
+              className="h-9 w-full sm:w-auto rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+            >
+              <option value="">All patients</option>
+              {patients.map((p) => (
+                <option key={p.id} value={p.id}>{p.full_name}</option>
+              ))}
+            </select>
+            <select
+              value={filterDoctor}
+              onChange={(e) => setFilterDoctor(e.target.value)}
+              className="h-9 w-full sm:w-auto rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+            >
+              <option value="">All doctors</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>{d.full_name}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                setFilterPatient('');
+                setFilterDoctor('');
+                setDateFilter('all');
+              }}
+              className="h-9 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div className="p-0 overflow-x-auto">
+          {loading ? (
+            <div className="p-5"><TableSkeleton rows={5} /></div>
+          ) : filteredRows.length === 0 ? (
+            <EmptyState icon={CalendarDays} title="No appointments found" description="Adjust your filters or create a new appointment." />
+          ) : (
+            <table className="w-full min-w-[760px] text-sm">
+              <thead className="bg-slate-50/60 dark:bg-slate-900/40">
+                <tr>
+                  {canManageAppointments ? (
+                    <th className="h-10 px-5 text-left">
+                      <input
+                        type="checkbox"
+                        onChange={toggleSelectAllVisible}
+                        checked={filteredRows.length > 0 && filteredRows.every((row) => selectedIds.includes(row.id))}
+                        aria-label="Select all visible appointments"
+                      />
+                    </th>
+                  ) : null}
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date & Time</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Patient</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Doctor</th>
+                  <th className="h-10 px-5 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                  <th className="h-10 px-5 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row) => (
+                  <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
+                    {canManageAppointments ? (
+                      <td className="px-5 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(row.id)}
+                          onChange={() => toggleSelect(row.id)}
+                          aria-label={`Select appointment ${row.id}`}
+                        />
+                      </td>
+                    ) : null}
+                    <td className="px-5 py-3">
+                      <div className="font-medium text-slate-900 dark:text-slate-100">{row.appointment_date}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{row.appointment_time || 'Time TBD'}</div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs font-medium shrink-0">
+                          {row.patient_name?.charAt(0) || '?'}
+                        </div>
+                        <div>
+                          <div className="font-medium text-slate-900 dark:text-slate-100 group-hover:text-teal-700 dark:group-hover:text-teal-400 transition-colors">{row.patient_name}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-slate-600 dark:text-slate-300">{row.doctor_name || 'Unassigned'}</td>
+                    <td className="px-5 py-3">
+                      <StatusBadge value={row.status} />
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setViewing(row)}
+                          className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          title="View"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        {canManageAppointments && row.status !== 'completed' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickStatus(row, 'completed')}
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                            title="Mark completed"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                        ) : null}
+                        {canManageAppointments && row.status !== 'cancelled' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickStatus(row, 'cancelled')}
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                            title="Mark cancelled"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        ) : null}
+                        {canManageAppointments ? (
+                          <button
+                            type="button"
+                            onClick={() => openEdit(row)}
+                            className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
+                          >
+                            Edit
+                          </button>
+                        ) : null}
+                        {canManageAppointments ? (
+                          <button
+                            type="button"
+                            onClick={() => confirmDelete(row.id)}
+                            className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-medium transition-colors"
+                          >
+                            Delete
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <AppModal
+        open={open && canManageAppointments}
+        onClose={() => setOpen(false)}
+        title={editing ? 'Update Appointment' : 'New Appointment'}
+        size="md"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit(onSubmit)}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium disabled:opacity-50"
+            >
+              {editing ? 'Save Changes' : 'Create'}
+            </button>
+          </>
+        }
+      >
+        <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              label="Patient"
+              name="patient"
+              type="select"
+              register={register}
+              options={patients.map(p => ({ value: p.id, label: p.full_name }))}
+              error={errors.patient?.message}
+              touched={!!errors.patient}
+              required
+            />
+            <FormField
+              label="Doctor"
+              name="doctor"
+              type="select"
+              register={register}
+              options={doctors.map(d => ({ value: d.id, label: d.full_name }))}
+              error={errors.doctor?.message}
+              touched={!!errors.doctor}
+              required
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              label="Date"
+              name="appointment_date"
+              type="date"
+              register={register}
+              error={errors.appointment_date?.message}
+              touched={!!errors.appointment_date}
+              required
+            />
+            <FormField
+              label="Time"
+              name="appointment_time"
+              type="time"
+              register={register}
+              error={errors.appointment_time?.message}
+              touched={!!errors.appointment_time}
+            />
+          </div>
+          <FormField
+            label="Status"
+            name="status"
+            type="select"
+            register={register}
+            options={[
+              { value: 'scheduled', label: 'Scheduled' },
+              { value: 'pending', label: 'Pending' },
+              { value: 'completed', label: 'Completed' },
+              { value: 'cancelled', label: 'Cancelled' },
+            ]}
+            error={errors.status?.message}
+            touched={!!errors.status}
+          />
+          <FormField
+            label="Notes"
+            name="notes"
+            type="textarea"
+            placeholder="Add any notes..."
+            rows={3}
+            register={register}
+            error={errors.notes?.message}
+            touched={!!errors.notes}
+          />
+        </form>
+      </AppModal>
+
+      <ConfirmDialog
+        isOpen={!!deleteId && canManageAppointments}
+        title="Delete Appointment"
+        message="Are you sure you want to delete this appointment? This action cannot be undone."
+        onConfirm={onDelete}
+        onCancel={() => setDeleteId(null)}
+        isLoading={isDeleting}
+        isDangerous={true}
+      />
+
+      <AppModal
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        title={viewing ? `Appointment #${viewing.id}` : 'Appointment Details'}
+        size="md"
+        footer={
+          <button
+            type="button"
+            onClick={() => setViewing(null)}
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium"
+          >
+            Close
+          </button>
+        }
+      >
+        {viewing ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/50 dark:bg-slate-900/40">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Patient</p>
+                <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{viewing.patient_name || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Doctor</p>
+                <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{viewing.doctor_name || 'Unassigned'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Date</p>
+                <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{viewing.appointment_date || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Time</p>
+                <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{viewing.appointment_time || 'Time TBD'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Status</p>
+                <div className="mt-1"><StatusBadge value={viewing.status} /></div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Notes</p>
+              <p className="mt-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                {viewing.notes || 'No notes added for this appointment.'}
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </AppModal>
+    </div>
+  );
+}
