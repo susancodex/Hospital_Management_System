@@ -22,6 +22,7 @@ import AuditLogs from './pages/AuditLogs.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
 import Availability from './pages/Availability.jsx';
 import Departments from './pages/Departments.jsx';
+import BookAppointment from './pages/BookAppointment.jsx';
 
 import { Component } from 'react';
 
@@ -93,6 +94,7 @@ function App() {
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/availability" element={<Availability />} />
             <Route path="/departments" element={<Departments />} />
+            <Route path="/book-appointment" element={<BookAppointment />} />
           </Route>
 
           <Route path="/unauthorized" element={<Unauthorized />} />

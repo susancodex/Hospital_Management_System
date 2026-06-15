@@ -1,4 +1,4 @@
-import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, ChevronLeft, ChevronRight, BrainCircuit, Pill, ShieldCheck, MessageSquare, Building2, UserCog, Clock } from 'lucide-react';
+import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, ChevronLeft, ChevronRight, BrainCircuit, Pill, ShieldCheck, MessageSquare, Building2, UserCog, Clock, CalendarPlus } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { hasPermission } from '../lib/permissions.js';
@@ -33,6 +33,7 @@ const menuConfig = {
   patient: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
     { label: 'My Record', path: '/patients', icon: Users, permission: 'patients.view' },
+    { label: 'Book Appointment', path: '/book-appointment', icon: CalendarPlus, permission: 'appointments.view' },
     { label: 'My Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
     { label: 'Find Doctors', path: '/doctors', icon: Stethoscope, permission: 'patients.view' },
     { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },

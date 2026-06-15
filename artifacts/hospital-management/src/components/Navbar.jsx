@@ -23,6 +23,7 @@ const pageTitles = {
   '/admin/users': 'User Management',
   '/availability': 'My Availability',
   '/departments': 'Departments',
+  '/book-appointment': 'Book an Appointment',
 };
 
 const roleLabels = { admin: 'Administrator', doctor: 'Doctor', patient: 'Patient', reception: 'Receptionist' };
