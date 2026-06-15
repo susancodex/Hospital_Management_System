@@ -60,10 +60,8 @@ export const authAPI = {
   changePassword: (data) => apiClient.post('/change-password/', data),
   getProfile: () => getWithFallback('/profile/', null),
   me: () => apiClient.get('/users/me/'),
-  updateProfile: (formData) =>
-    patchWithFallback('/profile/', null, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+  updateProfile: (data) =>
+    patchWithFallback('/profile/', null, data),
   logout: () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');

@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Camera, Lock, Save, User, X, Shield, Activity, Clock, CheckCircle2, Moon, Sun, Smartphone, Monitor, HelpCircle, FileText, Calendar as CalendarIcon, Users } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -29,10 +29,7 @@ export default function Profile() {
   const refreshProfile = useAuthStore((state) => state.refreshProfile);
   const { isDark, setTheme } = useTheme();
   
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState('account');
 
@@ -64,15 +61,8 @@ export default function Profile() {
   const onProfileSubmit = async (values) => {
     setSaving(true);
     try {
-      const form = new FormData();
-      Object.entries(values).forEach(([k, v]) => form.append(k, v || ''));
-      if (avatarFile) form.append('profile_picture', avatarFile);
-      
-      await authAPI.updateProfile(form);
+      await authAPI.updateProfile(values);
       await refreshProfile();
-      
-      setAvatarFile(null);
-      setPreviewUrl(null);
       toast.success('Profile updated successfully');
     } catch {
       toast.error('Unable to update profile');
@@ -121,32 +111,18 @@ export default function Profile() {
             <div className="px-6 py-8 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-start gap-6">
               <div className="relative group shrink-0">
                 <div className="h-20 w-20 rounded-full overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-xl font-bold text-slate-600 dark:text-slate-300">
-                  {previewUrl || user?.profile_picture ? (
-                    <img src={previewUrl || user.profile_picture} alt="Avatar" className="h-full w-full object-cover" />
+                  {user?.profile_picture ? (
+                    <img src={user.profile_picture} alt="Avatar" className="h-full w-full object-cover" />
                   ) : (
                     getInitials()
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 h-7 w-7 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-teal-700 hover:border-teal-700 shadow-sm transition-colors"
+                <div
+                  title="Photo upload coming soon"
+                  className="absolute bottom-0 right-0 h-7 w-7 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600 shadow-sm cursor-not-allowed"
                 >
                   <Camera size={14} />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      setAvatarFile(f);
-                      setPreviewUrl(URL.createObjectURL(f));
-                    }
-                  }}
-                  className="hidden"
-                />
+                </div>
               </div>
 
               <div className="flex-1">
@@ -165,29 +141,6 @@ export default function Profile() {
                   </div>
                 </div>
                 
-                {avatarFile && (
-                  <div className="mt-4 flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleProfileSubmit(onProfileSubmit)()}
-                      disabled={saving}
-                      className="inline-flex items-center gap-2 h-8 px-3 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-xs font-medium transition-colors"
-                    >
-                      {saving ? 'Uploading...' : 'Save new photo'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAvatarFile(null);
-                        setPreviewUrl(null);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                      }}
-                      className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
 
