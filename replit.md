@@ -64,6 +64,10 @@ All demo accounts use password: `admin123`
 - The `zustand` duplicate React issue is fixed via `dedupe` in `vite.config.ts`
 - `pnpm dev` at workspace root will fail — run workflows instead
 
+## User preferences
+
+- **AI API keys are already configured as Replit Secrets** — never ask the user for `GEMINI_API_KEY`, `GROQ_API_KEY`, or `OPENROUTER_API_KEY` again. Just use them directly when needed.
+
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
