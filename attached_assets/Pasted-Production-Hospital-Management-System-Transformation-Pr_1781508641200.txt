@@ -1,0 +1,345 @@
+Production Hospital Management System Transformation Prompt
+You are a senior software architect, senior Django engineer, UI/UX designer, DevOps engineer, security engineer, healthcare software consultant, and AI systems engineer.
+I already have a working Hospital Management System built with Django. Your task is NOT to rebuild from scratch.
+
+You must:
+
+Analyze the entire existing codebase first.
+Review every model, view, template, API, service, URL, database schema, static files, media files, and project architecture.
+Identify existing features.
+Preserve working functionality.
+Refactor only where necessary.
+Upgrade the project into a real-world production-grade hospital management platform used by actual hospitals.
+Do not use vibe coding.
+Use clean architecture, industry standards, scalable code, modular design, reusable services, and maintainable code.
+Think and act like a senior engineering team reviewing a real production product.
+PHASE 1: COMPLETE PROJECT AUDIT
+Perform a complete audit of:
+Django apps
+Models
+Views
+Templates
+Forms
+APIs
+Database schema
+User roles
+Authentication
+Authorization
+Dashboard
+Reports
+Billing
+Existing AI features
+Existing integrations
+Generate a detailed audit report.
+Identify:
+
+Security issues
+Scalability issues
+Performance bottlenecks
+Bad UI/UX
+Duplicate code
+Missing functionality
+Missing validations
+Missing logging
+Missing error handling
+Do not remove existing features unless absolutely necessary.
+PHASE 2: PRODUCTION ARCHITECTURE
+Refactor project into:
+config/
+apps/
+core/
+services/
+repositories/
+api/
+ai/
+billing/
+notifications/
+audit/
+analytics/
+
+Follow:
+
+SOLID principles
+Clean Architecture
+Service Layer Pattern
+Repository Pattern
+Dependency Injection where appropriate
+PHASE 3: MODERN USER EXPERIENCE
+Replace any amateur-looking UI.
+Requirements:
+
+Professional healthcare dashboard
+Enterprise-grade design
+Responsive layout
+Mobile-first design
+Tablet support
+Accessibility support
+Dark mode
+Light mode
+Use:
+Bootstrap 5
+Tailwind components where beneficial
+Chart.js
+HTMX
+Alpine.js
+Dashboard must feel similar to:
+Epic Systems
+Cerner
+AthenaHealth
+Practo
+Medplum
+Not a student project.
+PHASE 4: ROLE BASED ACCESS CONTROL
+Implement advanced RBAC.
+Roles:
+
+Super Admin
+Hospital Owner
+Administrator
+Doctor
+Nurse
+Receptionist
+Pharmacist
+Lab Technician
+Radiologist
+Accountant
+Patient
+Insurance Officer
+Permissions must be granular.
+PHASE 5: PATIENT MANAGEMENT
+Enhance patient module.
+Features:
+
+Patient Registration
+Patient Profile
+Medical History
+Allergies
+Vaccination Records
+Family History
+Chronic Diseases
+Emergency Contacts
+Uploaded Documents
+Digital Patient Card
+QR Code Profile
+Patient Timeline
+PHASE 6: APPOINTMENT SYSTEM
+Implement:
+Online Booking
+Doctor Availability
+Calendar View
+Time Slot Management
+Queue Management
+Waiting List
+Appointment Reminders
+Rescheduling
+Cancellation Workflow
+PHASE 7: ELECTRONIC HEALTH RECORDS (EHR)
+Implement complete EHR.
+Features:
+
+SOAP Notes
+Diagnosis
+Prescriptions
+Lab Orders
+Imaging Orders
+Medical Documents
+Treatment Plans
+Progress Notes
+Attachments
+PHASE 8: AI HEALTHCARE ASSISTANT
+Integrate AI using:
+GEMINI_API_KEY
+GEMINI_MODEL=gemini-2.5-flash
+
+Primary AI:
+Google Gemini
+
+Fallback AI:
+
+GROQ_API_KEY
+
+Secondary fallback:
+
+OPENROUTER_API_KEY
+
+Implement automatic failover.
+
+Priority:
+
+Gemini
+→ Groq
+→ OpenRouter
+
+Features:
+
+Medical Note Summarization
+Prescription Drafting
+ICD Code Suggestions
+Disease Prediction Assistance
+Clinical Decision Support
+Medical Report Explanation
+Lab Report Analysis
+Radiology Report Assistance
+Patient Chat Assistant
+Doctor Copilot
+Treatment Recommendation Assistance
+All AI outputs must include:
+"AI Generated — Doctor Verification Required"
+
+PHASE 9: AGENTIC AI SYSTEM
+Create Healthcare AI Agents.
+Triage Agent
+Scheduling Agent
+Billing Agent
+Medical Records Agent
+Follow-up Agent
+Insurance Agent
+Analytics Agent
+Agent architecture:
+Planner
+Reasoner
+Executor
+Memory
+
+Provide complete orchestration.
+
+PHASE 10: LABORATORY MANAGEMENT
+Implement:
+Lab Orders
+Sample Tracking
+Result Entry
+PDF Reports
+Lab Dashboard
+AI Interpretation Assistance
+PHASE 11: PHARMACY MANAGEMENT
+Implement:
+Inventory
+Stock Management
+Expiry Tracking
+Barcode Support
+Sales
+Prescription Validation
+Procurement
+PHASE 12: BILLING & FINANCE
+Implement:
+Invoices
+Payments
+Refunds
+Tax Calculations
+Insurance Claims
+Revenue Reports
+Expense Tracking
+PHASE 13: INVENTORY MANAGEMENT
+Implement:
+Medical Supplies
+Equipment Tracking
+Purchase Orders
+Vendors
+Stock Alerts
+PHASE 14: REPORTING & ANALYTICS
+Create executive dashboards.
+Charts:
+
+Revenue
+Appointments
+Patient Growth
+Inventory Usage
+Doctor Performance
+PHASE 15: COMMUNICATION SYSTEM
+Implement:
+Email Notifications
+SMS Notifications
+WhatsApp Integration
+Appointment Reminders
+OTP Verification
+PHASE 16: DOCUMENT MANAGEMENT
+Implement:
+PDF Generation
+PDF Storage
+Medical Records Archive
+OCR Support
+Document Search
+PHASE 17: SECURITY
+Implement:
+JWT Authentication
+MFA
+Session Security
+Audit Logs
+IP Tracking
+Login Monitoring
+CSRF Protection
+XSS Protection
+Rate Limiting
+Healthcare-grade security.
+PHASE 18: AUDIT TRAIL
+Track:
+User Actions
+Record Updates
+Prescription Changes
+Billing Changes
+Login Activity
+PHASE 19: API PLATFORM
+Build REST APIs using:
+Django REST Framework
+
+Features:
+
+Versioning
+Swagger
+OpenAPI
+Rate Limiting
+API Tokens
+PHASE 20: PERFORMANCE
+Implement:
+Redis Caching
+Query Optimization
+Pagination
+Async Tasks
+Celery
+Background Jobs
+PHASE 21: DEVOPS
+Production deployment support:
+Docker
+Docker Compose
+Nginx
+Gunicorn
+PostgreSQL
+Redis
+Environment variables:
+GEMINI_API_KEY
+DJANGO_SETTINGS_MODULE
+GEMINI_MODEL
+GROQ_API_KEY
+OPENROUTER_API_KEY
+
+PHASE 22: TESTING
+Create:
+Unit Tests
+Integration Tests
+API Tests
+UI Tests
+Target:
+80%+ coverage
+
+PHASE 23: FINAL REVIEW
+Before making any modification:
+Analyze existing feature.
+Check if feature already exists.
+Improve instead of replacing.
+Prevent breaking changes.
+Maintain backward compatibility.
+At the end generate:
+Architecture Diagram
+Database ERD
+API Documentation
+Security Report
+Performance Report
+Production Readiness Checklist
+Deliver production-quality code only.
+No shortcuts.
+No mock implementations.
+No demo code.
+No vibe coding.
+No placeholder logic.
+
+Think like a real healthcare software company building software for actual hospitals.

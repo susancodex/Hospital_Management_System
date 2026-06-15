@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   FileText, Plus, ArrowUpRight, ArrowDownRight, MoreHorizontal,
   Calendar as CalendarIcon, Users, Stethoscope, CreditCard,
-  ClipboardList, Activity, Clock, CheckCircle2, AlertCircle,
+  ClipboardList, Activity, Clock, CheckCircle2, AlertCircle, XCircle, Inbox,
 } from 'lucide-react';
 import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -282,13 +282,47 @@ function AdminDashboard({ user }) {
 function DoctorDashboard({ user }) {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
+  const [appointments, setAppointments] = useState([]);
+  const [apptLoading, setApptLoading] = useState(true);
+  const [actioningId, setActioningId] = useState(null);
+
+  const loadAppointments = async () => {
+    setApptLoading(true);
+    try {
+      const result = await appointmentsAPI.list();
+      setAppointments(result.items || []);
+    } catch {
+      // silent
+    } finally {
+      setApptLoading(false);
+    }
+  };
 
   useEffect(() => {
     statsAPI.get()
       .then((r) => setStats(r.data))
       .catch(() => {})
       .finally(() => setLoading(false));
+    loadAppointments();
   }, []);
+
+  const handleStatusUpdate = async (apptId, status) => {
+    setActioningId(apptId);
+    try {
+      await appointmentsAPI.update(apptId, { status });
+      const labels = { confirmed: 'confirmed', rejected: 'rejected', completed: 'completed', cancelled: 'cancelled' };
+      toast.success(`Appointment ${labels[status] || status}`);
+      await loadAppointments();
+      statsAPI.get().then((r) => setStats(r.data)).catch(() => {});
+    } catch {
+      toast.error('Unable to update appointment');
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const pendingRequests = appointments.filter((a) => a.status === 'pending');
+  const upcomingConfirmed = (stats?.upcoming_appointments || []).filter((a) => a.status !== 'pending');
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -318,8 +352,86 @@ function DoctorDashboard({ user }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard title="Total Appointments" value={loading ? '…' : (stats?.total_appointments ?? 0)} icon={CalendarIcon} iconColor="text-blue-600" />
         <KpiCard title="Today's Appointments" value={loading ? '…' : (stats?.today_appointments ?? 0)} icon={Clock} iconColor="text-amber-600" />
-        <KpiCard title="Pending" value={loading ? '…' : (stats?.pending_appointments ?? 0)} icon={AlertCircle} iconColor="text-rose-600" />
+        <KpiCard title="Pending Requests" value={apptLoading ? '…' : pendingRequests.length} icon={AlertCircle} iconColor="text-rose-600" />
         <KpiCard title="My Patients" value={loading ? '…' : (stats?.total_patients ?? 0)} icon={Users} iconColor="text-emerald-600" />
+      </div>
+
+      {/* ── Pending Appointment Requests ── */}
+      <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-amber-100 dark:border-amber-900/40 flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/20">
+          <div className="flex items-center gap-2.5">
+            <Inbox className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Appointment Requests</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Pending requests awaiting your decision</p>
+            </div>
+          </div>
+          {pendingRequests.length > 0 && (
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-bold">
+              {pendingRequests.length}
+            </span>
+          )}
+        </div>
+        {apptLoading ? (
+          <div className="p-8 flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : pendingRequests.length === 0 ? (
+          <div className="px-5 py-8 text-center">
+            <CheckCircle2 className="w-8 h-8 text-emerald-400 dark:text-emerald-500 mx-auto mb-2" />
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">All caught up!</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">No pending appointment requests.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {pendingRequests.map((appt) => {
+              const isActioning = actioningId === appt.id;
+              const initials = (appt.patient_name || '?').split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase();
+              return (
+                <div key={appt.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-xs font-semibold text-amber-700 dark:text-amber-300 shrink-0">
+                      {initials}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{appt.patient_name || 'Unknown Patient'}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {appt.date} at {appt.time || 'TBD'}
+                        {appt.reason ? <span className="ml-2 text-slate-400">· {appt.reason}</span> : null}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
+                    <button
+                      type="button"
+                      disabled={isActioning}
+                      onClick={() => handleStatusUpdate(appt.id, 'confirmed')}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 disabled:opacity-50 transition-colors"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Confirm
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isActioning}
+                      onClick={() => handleStatusUpdate(appt.id, 'completed')}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-950/60 disabled:opacity-50 transition-colors"
+                    >
+                      Complete
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isActioning}
+                      onClick={() => handleStatusUpdate(appt.id, 'rejected')}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-950/60 disabled:opacity-50 transition-colors"
+                    >
+                      <XCircle className="w-3.5 h-3.5" /> Reject
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -328,7 +440,7 @@ function DoctorDashboard({ user }) {
             <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Upcoming Appointments</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Your next scheduled appointments</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Your confirmed & scheduled appointments</p>
               </div>
               <Link to="/appointments" className="text-sm font-medium text-teal-700 dark:text-teal-400 hover:underline">View all</Link>
             </div>

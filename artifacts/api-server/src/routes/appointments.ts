@@ -151,6 +151,41 @@ router.put("/appointments/:id/", requireAuth, async (req, res) => {
       updatedAt: new Date(),
     }).where(eq(appointmentsTable.id, Number(req.params.id)));
     await logAction(req, "UPDATE", "appointment", Number(req.params.id));
+
+    // Notify patient when doctor changes appointment status
+    if (status && row.appt.patientId) {
+      const doctorName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Your doctor";
+      const statusMessages: Record<string, { title: string; message: string }> = {
+        confirmed: {
+          title: "Appointment Confirmed",
+          message: `Dr. ${doctorName} has confirmed your appointment on ${row.appt.date} at ${row.appt.time}.`,
+        },
+        rejected: {
+          title: "Appointment Declined",
+          message: `Dr. ${doctorName} has declined your appointment request for ${row.appt.date} at ${row.appt.time}. Please book a new time.`,
+        },
+        completed: {
+          title: "Appointment Completed",
+          message: `Your appointment with Dr. ${doctorName} on ${row.appt.date} has been marked as completed.`,
+        },
+        cancelled: {
+          title: "Appointment Cancelled",
+          message: `Your appointment with Dr. ${doctorName} on ${row.appt.date} at ${row.appt.time} has been cancelled.`,
+        },
+      };
+      const notif = statusMessages[status];
+      if (notif) {
+        await db.insert(notificationsTable).values({
+          userId: row.appt.patientId,
+          title: notif.title,
+          message: notif.message,
+          type: "appointment",
+          relatedType: "appointment",
+          relatedId: row.appt.id,
+        }).catch(() => {});
+      }
+    }
+
     const [updated] = await db.select({ appt: appointmentsTable, patient: usersTable }).from(appointmentsTable).leftJoin(usersTable, eq(appointmentsTable.patientId, usersTable.id)).where(eq(appointmentsTable.id, Number(req.params.id)));
     res.json(formatAppt(updated.appt, updated.patient ?? null));
     return;
