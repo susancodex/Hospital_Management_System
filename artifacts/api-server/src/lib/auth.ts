@@ -3,7 +3,21 @@ import { type Request, type Response, type NextFunction } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
-const JWT_SECRET = process.env.JWT_SECRET || "hospital-mgmt-secret-key-2024";
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("JWT_SECRET environment variable is required in production. Set it via Replit Secrets.");
+    }
+    // Development-only fallback — NOT for production use.
+    console.warn("[SECURITY] JWT_SECRET not set. Using insecure dev fallback. Set JWT_SECRET in Secrets for any real deployment.");
+    return "dev-only-insecure-fallback-set-JWT_SECRET-in-secrets";
+  }
+  if (secret.length < 32) {
+    console.warn("[SECURITY] JWT_SECRET is too short (< 32 chars). Use a long random string.");
+  }
+  return secret;
+})();
 
 export interface AuthUser {
   id: number;

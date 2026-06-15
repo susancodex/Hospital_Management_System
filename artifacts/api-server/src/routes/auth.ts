@@ -42,8 +42,10 @@ router.post("/token/refresh/", async (req, res) => {
   res.json({ access: tokens.access });
 });
 
+// Public self-registration: role is ALWAYS forced to "patient" server-side.
+// Doctors and admins must be created by an admin via the admin user-management flow.
 router.post("/register/", async (req, res) => {
-  const { username, email, password, first_name, last_name, role = "patient", phone } = req.body;
+  const { username, email, password, first_name, last_name, phone } = req.body;
   if (!username || !email || !password) {
     res.status(400).json({ detail: "Username, email, and password are required." });
     return;
@@ -59,14 +61,11 @@ router.post("/register/", async (req, res) => {
     return;
   }
   const hashed = await bcrypt.hash(password, 12);
+  // Role is intentionally hard-coded to "patient" — never trust client-supplied role.
   const [user] = await db.insert(usersTable).values({
-    username, email, password: hashed, firstName: first_name || "", lastName: last_name || "", role, phone: phone || "",
+    username, email, password: hashed, firstName: first_name || "", lastName: last_name || "", role: "patient", phone: phone || "",
   }).returning();
-  if (role === "doctor") {
-    await db.insert(doctorsTable).values({ userId: user.id, specialization: req.body.specialization || "", department: req.body.department || "" });
-  } else if (role === "patient") {
-    await db.insert(patientsTable).values({ userId: user.id });
-  }
+  await db.insert(patientsTable).values({ userId: user.id });
   const tokens = generateTokens({ id: user.id, username: user.username, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName });
   res.status(201).json({ ...tokens, user: formatUser(user) });
 });

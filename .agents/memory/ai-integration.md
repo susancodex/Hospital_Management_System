@@ -1,11 +1,13 @@
 ---
 name: AI integration approach
-description: How AI features are wired in this HMS project
+description: How to add OpenAI AI features in this HMS project (key sourcing decision)
 ---
-# AI Integration
+# AI Integration Strategy
 
-**Rule:** Replit OpenAI integration requires account upgrade. This user declined. Use `OPENAI_API_KEY` environment secret (user's own key) instead.
+## Rule: Use OPENAI_API_KEY secret, not Replit integration
 
-**How to apply:** All AI routes in `artifacts/api-server/src/routes/ai.ts` call `getOpenAIClient()` which reads `process.env.OPENAI_API_KEY`. When key is missing, routes return useful fallback responses rather than errors. Ask user to add key via Secrets tab.
+**Rule:** Do not call `setupReplitAIIntegrations` for OpenAI — it requires an account upgrade this user declined. All AI routes must read `process.env.OPENAI_API_KEY` directly (user's own key added via Replit Secrets tab).
 
-**Why:** setupReplitAIIntegrations returned `status: "awaiting_account_upgrade"` — do not retry this call.
+**Why:** `setupReplitAIIntegrations({ providerSlug: "openai" })` returned `{ success: false, status: "awaiting_account_upgrade" }`. Retrying will not help.
+
+**How to apply:** All AI routes use `getOpenAIClient()` in `artifacts/api-server/src/routes/ai.ts` which returns `null` when key is absent, triggering graceful fallback responses. When AI features don't work, ask user to add `OPENAI_API_KEY` to Secrets.
