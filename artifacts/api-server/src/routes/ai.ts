@@ -7,15 +7,27 @@ import { logAction } from "../lib/audit";
 const router = Router();
 
 // ── Multi-provider AI cascade ─────────────────────────────────────────────────
+// Flow: Gemini (primary) → Groq (fallback 1) → OpenRouter (fallback 2) → graceful error
+
+type ProviderError = { provider: string; reason: "rate_limit" | "auth" | "unavailable" | "unknown"; message: string };
 
 function getAIClient(apiKey: string, baseURL?: string) {
   if (!apiKey) return null;
   try {
     const OpenAI = require("openai");
-    return new OpenAI.default({ apiKey, baseURL });
+    return new OpenAI.default({ apiKey, baseURL, timeout: 20_000, maxRetries: 0 });
   } catch {
     return null;
   }
+}
+
+function classifyError(err: any): ProviderError["reason"] {
+  const status = err?.status ?? err?.response?.status ?? 0;
+  const msg = (err?.message ?? "").toLowerCase();
+  if (status === 429 || msg.includes("rate limit") || msg.includes("quota") || msg.includes("too many requests")) return "rate_limit";
+  if (status === 401 || status === 403 || msg.includes("invalid api key") || msg.includes("unauthorized")) return "auth";
+  if (status >= 500 || msg.includes("service unavailable") || msg.includes("overloaded")) return "unavailable";
+  return "unknown";
 }
 
 async function tryProvider(
@@ -24,17 +36,22 @@ async function tryProvider(
   messages: { role: string; content: string }[],
   systemPrompt: string,
   maxTokens = 1024,
-): Promise<string | null> {
-  if (!client) return null;
+  providerName = "unknown",
+): Promise<{ text: string | null; error?: ProviderError }> {
+  if (!client) return { text: null };
   try {
     const response = await client.chat.completions.create({
       model,
       max_tokens: maxTokens,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
     });
-    return response.choices?.[0]?.message?.content ?? null;
-  } catch {
-    return null;
+    const text = response.choices?.[0]?.message?.content ?? null;
+    return { text };
+  } catch (err: any) {
+    const reason = classifyError(err);
+    const msg = err?.message ?? "Unknown error";
+    console.warn(`[AI] ${providerName} failed (${reason}): ${msg.substring(0, 120)}`);
+    return { text: null, error: { provider: providerName, reason, message: msg } };
   }
 }
 
@@ -42,41 +59,69 @@ async function callAI(
   messages: { role: string; content: string }[],
   systemPrompt: string,
   maxTokens = 1024,
-): Promise<{ text: string | null; provider: string }> {
-  // 1. Gemini (Google OpenAI-compatible endpoint)
+): Promise<{ text: string | null; provider: string; errors: ProviderError[] }> {
+  const errors: ProviderError[] = [];
+
+  // 1. Gemini (primary) — Google OpenAI-compatible endpoint
   const geminiKey = process.env.GEMINI_API_KEY;
   const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   if (geminiKey) {
     const client = getAIClient(geminiKey, "https://generativelanguage.googleapis.com/v1beta/openai/");
-    const text = await tryProvider(client, geminiModel, messages, systemPrompt, maxTokens);
-    if (text) return { text, provider: "gemini" };
+    const { text, error } = await tryProvider(client, geminiModel, messages, systemPrompt, maxTokens, "gemini");
+    if (text) return { text, provider: "gemini", errors };
+    if (error) errors.push(error);
+  } else {
+    console.info("[AI] Gemini skipped — GEMINI_API_KEY not set");
   }
 
-  // 2. Groq
+  // 2. Groq (fallback 1)
   const groqKey = process.env.GROQ_API_KEY;
   if (groqKey) {
     const client = getAIClient(groqKey, "https://api.groq.com/openai/v1");
-    const text = await tryProvider(client, "llama-3.3-70b-versatile", messages, systemPrompt, maxTokens);
-    if (text) return { text, provider: "groq" };
+    const { text, error } = await tryProvider(client, "llama-3.3-70b-versatile", messages, systemPrompt, maxTokens, "groq");
+    if (text) return { text, provider: "groq", errors };
+    if (error) errors.push(error);
+  } else {
+    console.info("[AI] Groq skipped — GROQ_API_KEY not set");
   }
 
-  // 3. OpenRouter
+  // 3. OpenRouter (fallback 2)
   const orKey = process.env.OPENROUTER_API_KEY;
   if (orKey) {
     const client = getAIClient(orKey, "https://openrouter.ai/api/v1");
-    const text = await tryProvider(client, "meta-llama/llama-3.3-70b-instruct", messages, systemPrompt, maxTokens);
-    if (text) return { text, provider: "openrouter" };
+    const { text, error } = await tryProvider(client, "meta-llama/llama-3.3-70b-instruct", messages, systemPrompt, maxTokens, "openrouter");
+    if (text) return { text, provider: "openrouter", errors };
+    if (error) errors.push(error);
+  } else {
+    console.info("[AI] OpenRouter skipped — OPENROUTER_API_KEY not set");
   }
 
-  // 4. OpenAI (fallback)
-  const oaiKey = process.env.OPENAI_API_KEY;
-  if (oaiKey) {
-    const client = getAIClient(oaiKey);
-    const text = await tryProvider(client, "gpt-4o-mini", messages, systemPrompt, maxTokens);
-    if (text) return { text, provider: "openai" };
-  }
+  // All providers exhausted
+  console.error(`[AI] All providers exhausted. Failures: ${errors.map((e) => `${e.provider}(${e.reason})`).join(", ")}`);
+  return { text: null, provider: "none", errors };
+}
 
-  return { text: null, provider: "none" };
+/** Build a user-friendly error message from provider failure reasons */
+function buildUserFriendlyError(errors: ProviderError[], context: "chat" | "clinical" | "analysis" = "chat"): string {
+  const hasRateLimit = errors.some((e) => e.reason === "rate_limit");
+  const hasAuth = errors.some((e) => e.reason === "auth");
+
+  if (hasRateLimit && errors.length >= 2) {
+    return "Our AI services are experiencing high demand right now. Please try again in a few minutes.";
+  }
+  if (hasAuth) {
+    return "AI services are temporarily misconfigured. Our team has been notified — please try again shortly.";
+  }
+  if (errors.length === 0) {
+    return "No AI provider keys are configured. Please add GEMINI_API_KEY, GROQ_API_KEY, or OPENROUTER_API_KEY in Secrets.";
+  }
+  if (context === "clinical") {
+    return "AI assistance is temporarily unavailable. Please proceed using standard clinical protocols and consult relevant guidelines directly.";
+  }
+  if (context === "analysis") {
+    return "AI analysis is temporarily unavailable. Please consult a healthcare professional for evaluation.";
+  }
+  return "AI services are temporarily unavailable. Please try again shortly or contact the front desk for assistance.";
 }
 
 // ── GET /ai/insights/ ──────────────────────────────────────────────────────────
@@ -139,10 +184,11 @@ router.post("/ai/chat/", requireAuth, async (req, res) => {
     { role: "user", content: message },
   ];
 
-  const { text: aiReply, provider } = await callAI(messages, systemPrompt);
+  const { text: aiReply, provider, errors } = await callAI(messages, systemPrompt);
 
   if (!aiReply) {
-    res.json({ reply: `Hello! I'm MedAssist. Our AI service is currently being configured. Please call our front desk or use the Appointments page to book a visit.${DISCLAIMER}`, disclaimer: true, provider: "fallback" });
+    const friendlyMsg = buildUserFriendlyError(errors, "chat");
+    res.json({ reply: `${friendlyMsg}${DISCLAIMER}`, disclaimer: true, provider: "none", ai_unavailable: true });
     return;
   }
 
@@ -165,7 +211,7 @@ router.post("/ai/symptom-analyzer/", requireAuth, async (req, res) => {
 Be conservative — when in doubt, recommend higher urgency. Never give a definitive diagnosis.`;
 
   const userMsg = `Symptoms: ${symptoms}${age ? `. Age: ${age}` : ""}${gender ? `. Gender: ${gender}` : ""}${duration ? `. Duration: ${duration}` : ""}`;
-  const { text: aiResponse, provider } = await callAI([{ role: "user", content: userMsg }], systemPrompt);
+  const { text: aiResponse, provider, errors } = await callAI([{ role: "user", content: userMsg }], systemPrompt);
 
   let result;
   if (aiResponse) {
@@ -173,18 +219,20 @@ Be conservative — when in doubt, recommend higher urgency. Never give a defini
   }
 
   if (!result) {
+    const friendlyMsg = buildUserFriendlyError(errors, "analysis");
     result = {
-      possible_conditions: ["Unable to analyze — AI service unavailable"],
+      possible_conditions: [friendlyMsg],
       risk_level: "medium",
-      recommendation: "Please consult a doctor for proper evaluation.",
+      recommendation: "Please consult a doctor for proper evaluation of your symptoms.",
       urgency: "Within 24-48 hours",
       specialist: "General Practitioner",
       warning_signs: ["Worsening symptoms", "High fever", "Difficulty breathing"],
+      ai_unavailable: true,
     };
   }
 
   await logAction(req, "SYMPTOM_ANALYSIS", "ai_symptom", undefined, `Symptoms: ${symptoms.substring(0, 80)}`);
-  res.json({ ...result, disclaimer: "⚠️ AI-generated — not a medical diagnosis. Always consult a qualified healthcare professional.", provider: provider ?? "fallback" });
+  res.json({ ...result, disclaimer: "⚠️ AI-generated — not a medical diagnosis. Always consult a qualified healthcare professional.", provider: provider ?? "none" });
 });
 
 // ── POST /ai/doctor-assistant/ ─────────────────────────────────────────────────
@@ -202,13 +250,14 @@ router.post("/ai/doctor-assistant/", requireAuth, requireRole("doctor", "admin")
 
   const systemPrompt = `You are an AI clinical co-pilot assisting a licensed doctor at AetherCare Hospital. Support (never replace) clinical judgment by: summarizing patient history, suggesting differential diagnoses, referencing treatment guidelines, and generating structured clinical notes. Be precise, evidence-based, and flag critical findings prominently. All AI suggestions require clinical validation.${patientContext}`;
 
-  const { text: aiResponse, provider } = await callAI([{ role: "user", content: `Task: ${task}${context ? `\n\nContext: ${context}` : ""}` }], systemPrompt, 2048);
+  const { text: aiResponse, provider, errors } = await callAI([{ role: "user", content: `Task: ${task}${context ? `\n\nContext: ${context}` : ""}` }], systemPrompt, 2048);
 
   await logAction(req, "DOCTOR_AI_ASSIST", "ai_doctor", patient_id ? Number(patient_id) : undefined, `Task: ${task.substring(0, 80)}`);
   res.json({
-    result: aiResponse ?? "AI service is currently unavailable. Please proceed with standard clinical protocols.",
+    result: aiResponse ?? buildUserFriendlyError(errors, "clinical"),
     disclaimer: "⚠️ AI Generated — Doctor Verification Required before clinical use.",
-    provider: provider ?? "fallback",
+    provider: provider ?? "none",
+    ai_unavailable: !aiResponse,
   });
 });
 
@@ -224,18 +273,19 @@ router.post("/ai/summarize-report/", requireAuth, requireRole("doctor", "admin")
 - follow_up_recommended: boolean
 - follow_up_reason: string`;
 
-  const { text: aiResponse, provider } = await callAI([{ role: "user", content: `Report Type: ${report_type}\n\nReport:\n${report_text}` }], systemPrompt);
+  const { text: aiResponse, provider, errors } = await callAI([{ role: "user", content: `Report Type: ${report_type}\n\nReport:\n${report_text}` }], systemPrompt);
 
   let result;
   if (aiResponse) {
     try { result = JSON.parse(aiResponse.replace(/```json\n?|\n?```/g, "").trim()); } catch { result = null; }
   }
   if (!result) {
-    result = { patient_summary: "Your medical report has been received. Please discuss results with your doctor.", clinical_summary: "AI summarization unavailable. Please review the full report manually.", key_findings: ["Manual review required"], follow_up_recommended: true, follow_up_reason: "Standard clinical review" };
+    const friendlyMsg = buildUserFriendlyError(errors, "clinical");
+    result = { patient_summary: "Your medical report has been received. Please discuss results with your doctor.", clinical_summary: `${friendlyMsg} Please review the full report manually.`, key_findings: ["Manual review required"], follow_up_recommended: true, follow_up_reason: "Standard clinical review", ai_unavailable: true };
   }
 
   await logAction(req, "REPORT_SUMMARIZE", "ai_report");
-  res.json({ ...result, provider: provider ?? "fallback" });
+  res.json({ ...result, provider: provider ?? "none" });
 });
 
 // ── POST /ai/icd-suggest/ — ICD-10 code suggestions ──────────────────────────
@@ -250,18 +300,19 @@ router.post("/ai/icd-suggest/", requireAuth, requireRole("doctor", "admin"), asy
 Base suggestions on clinical accuracy and specificity.`;
 
   const input = `Diagnosis/Complaint: ${diagnosis || ""}\nSymptoms: ${symptoms || ""}\nAdditional Context: ${ctx || ""}`;
-  const { text: aiResponse, provider } = await callAI([{ role: "user", content: input }], systemPrompt);
+  const { text: aiResponse, provider, errors } = await callAI([{ role: "user", content: input }], systemPrompt);
 
   let result;
   if (aiResponse) {
     try { result = JSON.parse(aiResponse.replace(/```json\n?|\n?```/g, "").trim()); } catch { result = null; }
   }
   if (!result) {
-    result = { suggestions: [], primary_code: "", coding_notes: "AI coding service unavailable. Please consult a certified medical coder." };
+    const friendlyMsg = buildUserFriendlyError(errors, "clinical");
+    result = { suggestions: [], primary_code: "", coding_notes: `${friendlyMsg} Please consult a certified medical coder.`, ai_unavailable: true };
   }
 
   await logAction(req, "ICD_SUGGEST", "ai_icd");
-  res.json({ ...result, disclaimer: "⚠️ AI Generated — Verify all ICD codes before submission.", provider: provider ?? "fallback" });
+  res.json({ ...result, disclaimer: "⚠️ AI Generated — Verify all ICD codes before submission.", provider: provider ?? "none" });
 });
 
 // ── POST /ai/lab-interpret/ — AI lab result interpretation ────────────────────
@@ -282,21 +333,22 @@ Flag all abnormal and critical values prominently. Be clinically precise.`;
   const resultsText = results.map((r: any) => `${r.test_name}: ${r.result_value} ${r.unit || ""} (Ref: ${r.reference_range || "N/A"})`).join("\n");
   const input = `Lab Results:\n${resultsText}${patient_context ? `\n\nPatient Context: ${patient_context}` : ""}`;
 
-  const { text: aiResponse, provider } = await callAI([{ role: "user", content: input }], systemPrompt, 2048);
+  const { text: aiResponse, provider, errors } = await callAI([{ role: "user", content: input }], systemPrompt, 2048);
 
   let result;
   if (aiResponse) {
     try { result = JSON.parse(aiResponse.replace(/```json\n?|\n?```/g, "").trim()); } catch { result = null; }
   }
   if (!result) {
-    result = { overall_summary: "AI interpretation unavailable.", findings: [], critical_alerts: [], clinical_recommendations: ["Manual review required"], follow_up_tests: [] };
+    const friendlyMsg = buildUserFriendlyError(errors, "clinical");
+    result = { overall_summary: friendlyMsg, findings: [], critical_alerts: [], clinical_recommendations: ["Manual review required by clinician"], follow_up_tests: [], ai_unavailable: true };
   }
 
   if (lab_order_id) {
     await logAction(req, "LAB_INTERPRET", "lab_order", Number(lab_order_id));
   }
 
-  res.json({ ...result, disclaimer: "⚠️ AI Generated — Doctor Verification Required before clinical use.", provider: provider ?? "fallback" });
+  res.json({ ...result, disclaimer: "⚠️ AI Generated — Doctor Verification Required before clinical use.", provider: provider ?? "none" });
 });
 
 // ── POST /ai/soap-generate/ — generate SOAP note from input ──────────────────
@@ -312,18 +364,19 @@ router.post("/ai/soap-generate/", requireAuth, requireRole("doctor", "admin"), a
 Be concise, clinically accurate, and use medical terminology appropriately.`;
 
   const input = `Chief Complaint: ${chief_complaint}\nHistory: ${history || "Not provided"}\nExamination Findings: ${exam_findings || "Not provided"}`;
-  const { text: aiResponse, provider } = await callAI([{ role: "user", content: input }], systemPrompt, 2048);
+  const { text: aiResponse, provider, errors } = await callAI([{ role: "user", content: input }], systemPrompt, 2048);
 
   let result;
   if (aiResponse) {
     try { result = JSON.parse(aiResponse.replace(/```json\n?|\n?```/g, "").trim()); } catch { result = null; }
   }
   if (!result) {
-    result = { subjective: "", objective: "", assessment: "", plan: "" };
+    const friendlyMsg = buildUserFriendlyError(errors, "clinical");
+    result = { subjective: chief_complaint, objective: exam_findings || "", assessment: friendlyMsg, plan: "Please document manually.", ai_unavailable: true };
   }
 
   await logAction(req, "SOAP_GENERATE", "ai_soap", patient_id ? Number(patient_id) : undefined);
-  res.json({ ...result, disclaimer: "⚠️ AI Generated — Doctor Verification Required.", provider: provider ?? "fallback" });
+  res.json({ ...result, disclaimer: "⚠️ AI Generated — Doctor Verification Required.", provider: provider ?? "none" });
 });
 
 // ── POST /ai/transcribe/ — AI voice-to-medical-notes transcription ────────────
