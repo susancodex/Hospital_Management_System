@@ -326,4 +326,62 @@ Be concise, clinically accurate, and use medical terminology appropriately.`;
   res.json({ ...result, disclaimer: "⚠️ AI Generated — Doctor Verification Required.", provider: provider ?? "fallback" });
 });
 
+// ── POST /ai/transcribe/ — AI voice-to-medical-notes transcription ────────────
+router.post("/ai/transcribe/", requireAuth, requireRole("doctor", "admin", "nurse"), async (req, res) => {
+  const { audio_base64, language = "en", generate_notes = true } = req.body;
+  if (!audio_base64) { res.status(400).json({ detail: "audio_base64 is required." }); return; }
+
+  const oaiKey = process.env.OPENAI_API_KEY;
+  if (!oaiKey) {
+    res.status(503).json({ detail: "Voice transcription requires an OpenAI API key. Set OPENAI_API_KEY in Secrets." });
+    return;
+  }
+
+  try {
+    // Dynamic import to avoid ESM bundler issues
+    const OpenAI = (await import("openai")).default;
+    const { toFile } = await import("openai/uploads");
+    const client = new OpenAI({ apiKey: oaiKey });
+
+    const buffer = Buffer.from(audio_base64, "base64");
+    const file = await toFile(buffer, "recording.webm", { type: "audio/webm" });
+
+    const transcription = await client.audio.transcriptions.create({
+      file,
+      model: "whisper-1",
+      language: language === "ne" ? "ne" : "en",
+    });
+
+    let medicalNotes = null;
+    if (generate_notes && transcription.text) {
+      const systemPrompt = `You are a clinical medical scribe. The following is a doctor's voice recording during a patient consultation.
+Convert it into structured SOAP-format medical notes. Return ONLY valid JSON (no markdown) with:
+- subjective: string — patient complaints, symptoms, history
+- objective: string — findings, vitals, examinations mentioned
+- assessment: string — diagnosis, clinical impression
+- plan: string — medications ordered, follow-up, instructions
+Be concise and use standard medical terminology.`;
+
+      const { text: notesText } = await callAI(
+        [{ role: "user", content: `Transcription: ${transcription.text}` }],
+        systemPrompt,
+        1024,
+      );
+      if (notesText) {
+        try { medicalNotes = JSON.parse(notesText.replace(/```json\n?|\n?```/g, "").trim()); } catch { medicalNotes = null; }
+      }
+    }
+
+    await logAction(req, "VOICE_TRANSCRIBE", "ai_transcription");
+    res.json({
+      transcription: transcription.text,
+      medical_notes: medicalNotes,
+      disclaimer: "⚠️ AI Generated — Clinician must review before adding to patient record.",
+    });
+  } catch (err: any) {
+    const msg = err?.message || "Transcription failed.";
+    res.status(500).json({ detail: msg });
+  }
+});
+
 export default router;

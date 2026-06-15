@@ -25,6 +25,10 @@ import Departments from './pages/Departments.jsx';
 import BookAppointment from './pages/BookAppointment.jsx';
 import LabOrders from './pages/LabOrders.jsx';
 import Pharmacy from './pages/Pharmacy.jsx';
+import Monitoring from './pages/Monitoring.jsx';
+import VerifyPrescription from './pages/VerifyPrescription.jsx';
+import Insurance from './pages/Insurance.jsx';
+import SubscriptionPlans from './pages/SubscriptionPlans.jsx';
 
 import { Component } from 'react';
 
@@ -99,8 +103,12 @@ function App() {
             <Route path="/book-appointment" element={<BookAppointment />} />
             <Route path="/lab-orders" element={<LabOrders />} />
             <Route path="/pharmacy" element={<Pharmacy />} />
+            <Route path="/monitoring" element={<Monitoring />} />
+            <Route path="/insurance" element={<Insurance />} />
+            <Route path="/subscription-plans" element={<SubscriptionPlans />} />
           </Route>
 
+          <Route path="/verify-rx/:token" element={<VerifyPrescription />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -266,3 +266,126 @@ export type LabOrder = typeof labOrdersTable.$inferSelect;
 export type LabResult = typeof labResultsTable.$inferSelect;
 export type PharmacyInventory = typeof pharmacyInventoryTable.$inferSelect;
 export type PharmacyDispensing = typeof pharmacyDispensingTable.$inferSelect;
+
+// ── Multi-hospital SaaS Foundation ───────────────────────────────────────────
+export const hospitalsTable = pgTable("hospitals", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 300 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  country: varchar("country", { length: 100 }).default("Nepal"),
+  address: text("address").default(""),
+  phone: varchar("phone", { length: 30 }).default(""),
+  email: varchar("email", { length: 255 }).default(""),
+  website: varchar("website", { length: 300 }).default(""),
+  logo: text("logo").default(""),
+  licenseNumber: varchar("license_number", { length: 100 }).default(""),
+  type: varchar("type", { length: 50 }).default("general"),
+  isActive: boolean("is_active").notNull().default(true),
+  settings: jsonb("settings").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const hospitalBranchesTable = pgTable("hospital_branches", {
+  id: serial("id").primaryKey(),
+  hospitalId: integer("hospital_id").references(() => hospitalsTable.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 300 }).notNull(),
+  code: varchar("code", { length: 50 }).default(""),
+  address: text("address").default(""),
+  phone: varchar("phone", { length: 30 }).default(""),
+  managerName: varchar("manager_name", { length: 200 }).default(""),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Subscription Plans ────────────────────────────────────────────────────────
+export const subscriptionPlansTable = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  description: text("description").default(""),
+  priceMonthly: decimal("price_monthly", { precision: 10, scale: 2 }).notNull().default("0"),
+  priceYearly: decimal("price_yearly", { precision: 10, scale: 2 }).default("0"),
+  maxDoctors: integer("max_doctors").default(-1),
+  maxPatients: integer("max_patients").default(-1),
+  maxBranches: integer("max_branches").default(1),
+  features: jsonb("features").default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const hospitalSubscriptionsTable = pgTable("hospital_subscriptions", {
+  id: serial("id").primaryKey(),
+  hospitalId: integer("hospital_id").references(() => hospitalsTable.id),
+  planId: integer("plan_id").references(() => subscriptionPlansTable.id),
+  status: varchar("status", { length: 30 }).default("active"),
+  billingCycle: varchar("billing_cycle", { length: 20 }).default("monthly"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  trialEndsAt: date("trial_ends_at"),
+  notes: text("notes").default(""),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Insurance Integration Layer ───────────────────────────────────────────────
+export const insuranceProvidersTable = pgTable("insurance_providers", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 300 }).notNull(),
+  code: varchar("code", { length: 50 }).unique(),
+  type: varchar("type", { length: 50 }).default("health"),
+  contactEmail: varchar("contact_email", { length: 255 }).default(""),
+  contactPhone: varchar("contact_phone", { length: 30 }).default(""),
+  address: text("address").default(""),
+  isActive: boolean("is_active").notNull().default(true),
+  coverageTypes: jsonb("coverage_types").default([]),
+  settings: jsonb("settings").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insuranceClaimsTable = pgTable("insurance_claims", {
+  id: serial("id").primaryKey(),
+  claimNumber: varchar("claim_number", { length: 100 }).notNull().unique(),
+  patientId: integer("patient_id").references(() => usersTable.id),
+  billingId: integer("billing_id").references(() => billingTable.id),
+  providerId: integer("provider_id").references(() => insuranceProvidersTable.id),
+  policyNumber: varchar("policy_number", { length: 100 }).default(""),
+  membershipId: varchar("membership_id", { length: 100 }).default(""),
+  claimAmount: decimal("claim_amount", { precision: 10, scale: 2 }).default("0"),
+  approvedAmount: decimal("approved_amount", { precision: 10, scale: 2 }).default("0"),
+  status: varchar("status", { length: 30 }).default("pending"),
+  diagnosisCodes: jsonb("diagnosis_codes").default([]),
+  submittedAt: timestamp("submitted_at"),
+  processedAt: timestamp("processed_at"),
+  rejectionReason: text("rejection_reason").default(""),
+  notes: text("notes").default(""),
+  attachments: jsonb("attachments").default([]),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ── Telemedicine Sessions ─────────────────────────────────────────────────────
+export const telemedicineSessionsTable = pgTable("telemedicine_sessions", {
+  id: serial("id").primaryKey(),
+  appointmentId: integer("appointment_id").references(() => appointmentsTable.id),
+  doctorId: integer("doctor_id").references(() => usersTable.id),
+  patientId: integer("patient_id").references(() => usersTable.id),
+  sessionToken: varchar("session_token", { length: 300 }).notNull().unique(),
+  roomUrl: varchar("room_url", { length: 500 }).default(""),
+  status: varchar("status", { length: 30 }).default("scheduled"),
+  scheduledAt: timestamp("scheduled_at"),
+  startedAt: timestamp("started_at"),
+  endedAt: timestamp("ended_at"),
+  durationMinutes: integer("duration_minutes").default(0),
+  notes: text("notes").default(""),
+  recordingUrl: text("recording_url").default(""),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Additional Type Exports ───────────────────────────────────────────────────
+export type Hospital = typeof hospitalsTable.$inferSelect;
+export type HospitalBranch = typeof hospitalBranchesTable.$inferSelect;
+export type SubscriptionPlan = typeof subscriptionPlansTable.$inferSelect;
+export type HospitalSubscription = typeof hospitalSubscriptionsTable.$inferSelect;
+export type InsuranceProvider = typeof insuranceProvidersTable.$inferSelect;
+export type InsuranceClaim = typeof insuranceClaimsTable.$inferSelect;
+export type TelemedicineSession = typeof telemedicineSessionsTable.$inferSelect;

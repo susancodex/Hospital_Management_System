@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { BrainCircuit, MessageSquare, Stethoscope, FileSearch, Activity, Send, AlertTriangle, ChevronRight, Loader2, RefreshCw } from 'lucide-react';
+import { BrainCircuit, MessageSquare, Stethoscope, FileSearch, Activity, Send, AlertTriangle, ChevronRight, Loader2, RefreshCw, Mic } from 'lucide-react';
+import VoiceRecorder from '../components/VoiceRecorder.jsx';
 import { toast } from 'sonner';
 import { aiAPI, insightsAPI, appointmentsAPI } from '../api/services.js';
 import { useAuth } from '../hooks/useAuth.js';
@@ -18,6 +19,7 @@ const TAB_PATIENT = [
 
 const TAB_DOCTOR = [
   { id: 'assistant', label: 'AI Assistant', icon: BrainCircuit },
+  { id: 'voice', label: 'Voice Notes', icon: Mic },
   { id: 'insights', label: 'Operational', icon: Activity },
   { id: 'symptoms', label: 'Symptom Tool', icon: Stethoscope },
 ];
@@ -25,6 +27,7 @@ const TAB_DOCTOR = [
 const TAB_ADMIN = [
   { id: 'insights', label: 'Operational', icon: Activity },
   { id: 'assistant', label: 'AI Assistant', icon: BrainCircuit },
+  { id: 'voice', label: 'Voice Notes', icon: Mic },
   { id: 'symptoms', label: 'Symptom Tool', icon: Stethoscope },
 ];
 
@@ -65,6 +68,15 @@ export default function AiTriage() {
         {activeTab === 'symptoms' && <SymptomAnalyzer />}
         {activeTab === 'assistant' && <DoctorAssistant />}
         {activeTab === 'insights' && <OperationalInsights />}
+        {activeTab === 'voice' && (
+          <div className="max-w-2xl mx-auto space-y-4">
+            <div className="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20 p-4">
+              <p className="text-sm text-teal-800 dark:text-teal-200 font-medium">🎙️ Voice-to-Medical-Notes</p>
+              <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">Record your voice during a consultation. AI (Whisper) transcribes and converts it to structured SOAP notes.</p>
+            </div>
+            <VoiceRecorder language="en" />
+          </div>
+        )}
       </div>
     </div>
   );

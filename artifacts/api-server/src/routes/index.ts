@@ -15,6 +15,10 @@ import availabilityRouter from "./availability";
 import statsRouter from "./stats";
 import labRouter from "./lab";
 import pharmacyRouter from "./pharmacy";
+import exportRouter from "./export";
+import qrRouter from "./qr";
+import insuranceRouter from "./insurance";
+import subscriptionsRouter from "./subscriptions";
 
 const router: IRouter = Router();
 
@@ -34,5 +38,9 @@ router.use(availabilityRouter);
 router.use(statsRouter);
 router.use(labRouter);
 router.use(pharmacyRouter);
+router.use(exportRouter);
+router.use(qrRouter);
+router.use(insuranceRouter);
+router.use(subscriptionsRouter);
 
 export default router;

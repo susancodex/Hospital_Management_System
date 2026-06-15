@@ -1,5 +1,7 @@
-import { Bell, ChevronDown, LogOut, Menu, Search, User } from 'lucide-react';
+import { Bell, ChevronDown, Globe, LogOut, Menu, Search, User } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { setLanguage, getCurrentLanguage } from '../i18n/index.js';
+import { useWsEvent, useWebSocket } from '../hooks/useWebSocket.js';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { patientsAPI, notificationsAPI } from '../api/services.js';
@@ -118,6 +120,22 @@ export default function Navbar() {
     } catch {}
   };
 
+  // Language switcher state
+  const [lang, setLang] = useState(getCurrentLanguage());
+  const toggleLanguage = () => {
+    const next = lang === 'en' ? 'ne' : 'en';
+    setLanguage(next);
+    setLang(next);
+  };
+
+  // WebSocket: receive real-time notifications
+  useWebSocket({});
+  useWsEvent('notification', (data) => {
+    const notif = { id: Date.now(), title: data.title || 'New notification', message: data.message || '', is_read: false, created_at: new Date().toISOString() };
+    setNotifications((prev) => [notif, ...prev]);
+    toast.info(notif.title, { description: notif.message?.slice(0, 80), duration: 4000 });
+  });
+
   const initials = (user?.username || 'U').slice(0, 2).toUpperCase();
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -177,6 +195,17 @@ export default function Navbar() {
             aria-label="Search"
           >
             <Search size={18} />
+          </button>
+
+          {/* Language switcher */}
+          <button
+            type="button"
+            onClick={toggleLanguage}
+            className="hidden sm:inline-flex items-center justify-center h-9 px-2 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold gap-1"
+            title={lang === 'en' ? 'Switch to Nepali (नेपाली)' : 'Switch to English'}
+          >
+            <Globe size={14} />
+            <span>{lang === 'en' ? 'EN' : 'ने'}</span>
           </button>
 
           <ThemeToggle />

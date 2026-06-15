@@ -1,4 +1,4 @@
-import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, ChevronLeft, ChevronRight, BrainCircuit, Pill, ShieldCheck, MessageSquare, Building2, UserCog, Clock, CalendarPlus, FlaskConical, Package } from 'lucide-react';
+import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, ChevronLeft, ChevronRight, BrainCircuit, Pill, ShieldCheck, MessageSquare, Building2, UserCog, Clock, CalendarPlus, FlaskConical, Package, Gauge, HeartHandshake, Crown } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { hasPermission } from '../lib/permissions.js';
@@ -18,8 +18,11 @@ const menuConfig = {
     { label: 'Pharmacy', path: '/pharmacy', icon: Package, permission: 'pharmacy.view' },
     { label: 'AI Centre', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
+    { label: 'Insurance', path: '/insurance', icon: HeartHandshake, permission: 'billing.view' },
     { label: 'User Accounts', path: '/admin/users', icon: UserCog, permission: 'admin.users' },
     { label: 'Audit Logs', path: '/audit-logs', icon: ShieldCheck, permission: 'aiInsights.view' },
+    { label: 'Subscriptions', path: '/subscription-plans', icon: Crown, permission: 'admin.users' },
+    { label: 'Monitoring', path: '/monitoring', icon: Gauge, permission: 'admin.users' },
   ],
   doctor: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },

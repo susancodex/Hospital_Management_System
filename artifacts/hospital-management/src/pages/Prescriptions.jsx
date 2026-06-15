@@ -1,17 +1,21 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, Pill, Trash2, Eye, Edit3, CheckCircle, XCircle, Download } from 'lucide-react';
+import { Plus, Pill, Trash2, Eye, Edit3, CheckCircle, XCircle, Download, QrCode, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { prescriptionsAPI, patientsAPI, appointmentsAPI } from '../api/services.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { useAuthStore } from '../store/authStore.js';
 import AppModal from '../components/common/AppModal.jsx';
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatusBadge from '../components/common/StatusBadge.jsx';
 import { TableSkeleton, EmptyState } from '../components/common/LoadingState.jsx';
 
+const API = import.meta.env.VITE_API_URL || '/api';
+
 const EMPTY_MED = { name: '', dosage: '', frequency: '', duration: '' };
 
 export default function Prescriptions() {
   const { user } = useAuth();
+  const token = useAuthStore((s) => s.token);
   const isDoctor = user?.role === 'doctor' || user?.role === 'admin';
 
   const [items, setItems] = useState([]);
@@ -24,6 +28,7 @@ export default function Prescriptions() {
   const [deleteItem, setDeleteItem] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [qrItem, setQrItem] = useState(null);
 
   const [form, setForm] = useState({
     patient_id: '',
@@ -113,35 +118,37 @@ export default function Prescriptions() {
     }
   };
 
-  const downloadPrescription = (item) => {
-    const lines = [
-      `PRESCRIPTION — AetherCare Hospital`,
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-      `Patient: ${item.patient_name || `ID ${item.patient_id}`}`,
-      `Doctor: ${item.doctor_name || `ID ${item.doctor_id}`}`,
-      `Date: ${item.created_at ? new Date(item.created_at).toLocaleDateString() : '—'}`,
-      `Valid Until: ${item.valid_until || 'N/A'}`,
-      `Status: ${item.status}`,
-      ``,
-      `MEDICINES`,
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-      ...(item.medicines || []).map((m, i) =>
-        `${i + 1}. ${m.name} — ${m.dosage || '—'} | ${m.frequency || '—'} | ${m.duration || '—'}`
-      ),
-      ``,
-      `INSTRUCTIONS`,
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-      item.instructions || 'No special instructions.',
-      ``,
-      `⚠️ This prescription is for authorized medical use only.`,
-    ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `prescription-${item.id}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const downloadPrescription = async (item) => {
+    try {
+      toast.loading('Generating PDF…', { id: 'rx-pdf' });
+      const res = await fetch(`${API}/export/prescription/${item.id}/?format=pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('PDF generation failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `prescription-${item.id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Prescription PDF downloaded', { id: 'rx-pdf' });
+    } catch {
+      toast.error('Failed to download PDF', { id: 'rx-pdf' });
+    }
+  };
+
+  const handleShowQR = async (item) => {
+    try {
+      const res = await fetch(`${API}/prescriptions/${item.id}/qr/?format=svg`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('QR generation failed');
+      const svg = await res.text();
+      setQrItem({ ...item, svg });
+    } catch {
+      toast.error('Failed to generate QR code');
+    }
   };
 
   const formModal = (
@@ -341,10 +348,18 @@ export default function Prescriptions() {
                         <button
                           type="button"
                           onClick={() => downloadPrescription(item)}
-                          title="Download"
+                          title="Download PDF"
                           className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
                         >
                           <Download size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleShowQR(item)}
+                          title="Show QR Code"
+                          className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-slate-200 dark:border-slate-700 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                        >
+                          <QrCode size={14} />
                         </button>
                         {isDoctor && (
                           <>
@@ -423,10 +438,17 @@ export default function Prescriptions() {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
+                onClick={() => handleShowQR(viewItem)}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-teal-600 text-teal-700 dark:text-teal-300 text-sm font-medium hover:bg-teal-50 dark:hover:bg-teal-950/30"
+              >
+                <QrCode size={14} /> QR Code
+              </button>
+              <button
+                type="button"
                 onClick={() => downloadPrescription(viewItem)}
                 className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium"
               >
-                <Download size={14} /> Download
+                <Download size={14} /> Download PDF
               </button>
             </div>
           </div>
@@ -434,6 +456,36 @@ export default function Prescriptions() {
       </AppModal>
 
       {/* Create modal */}
+      {/* QR Code Modal */}
+      {qrItem && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Prescription QR Code</p>
+                <p className="text-xs text-slate-400">Scan to verify authenticity</p>
+              </div>
+              <button onClick={() => setQrItem(null)} className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 flex flex-col items-center gap-3">
+              <div
+                className="w-48 h-48 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white flex items-center justify-center"
+                dangerouslySetInnerHTML={{ __html: qrItem.svg }}
+              />
+              <p className="text-xs text-center text-slate-500">
+                Patient: <strong>{qrItem.patient_name || `#${qrItem.patient_id}`}</strong>
+                <br />Prescription #{qrItem.id} · {qrItem.status}
+              </p>
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 text-center bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                ⚠️ For authorized medical & pharmacist use only
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AppModal
         open={showCreate}
         onClose={() => setShowCreate(false)}

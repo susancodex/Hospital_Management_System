@@ -6,13 +6,17 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import apiClient from '../api/client.js';
 import { appointmentsAPI, billingAPI, billingPaymentsAPI, patientsAPI } from '../api/services.js';
+import { useAuthStore } from '../store/authStore.js';
 import AppModal from '../components/common/AppModal.jsx';
 import { EmptyState, TableSkeleton } from '../components/common/LoadingState.jsx';
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatusBadge from '../components/common/StatusBadge.jsx';
 import { FormField, ConfirmDialog } from '../components/common/UIStates.jsx';
+
 import { useAuth } from '../hooks/useAuth.js';
 import { hasPermission } from '../lib/permissions.js';
+
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 const schema = z.object({
   patient: z.coerce.number().min(1, 'Patient is required'),
@@ -50,6 +54,7 @@ function KpiCard({ title, value, trend, trendUp, neutral = false }) {
 
 export default function Billing() {
   const { user } = useAuth();
+  const token = useAuthStore((s) => s.token);
   const canManageBilling = hasPermission(user?.role, 'billing.manage');
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
@@ -255,9 +260,24 @@ export default function Billing() {
     }
   };
 
-  const downloadInvoice = (row) => {
-    const baseUrl = apiClient.defaults.baseURL || '/api';
-    window.open(`${baseUrl}/billing/${row.id}/download-invoice/`, '_blank', 'noopener,noreferrer');
+  const downloadInvoice = async (row) => {
+    try {
+      toast.loading('Generating invoice PDF…', { id: 'inv-pdf' });
+      const res = await fetch(`${API_BASE}/export/billing/${row.id}/?format=pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Invoice generation failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${row.id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Invoice PDF downloaded', { id: 'inv-pdf' });
+    } catch {
+      toast.error('Failed to download invoice', { id: 'inv-pdf' });
+    }
   };
 
   const handleEsewaPay = async (row) => {
