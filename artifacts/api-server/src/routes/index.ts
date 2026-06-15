@@ -13,6 +13,8 @@ import auditRouter from "./audit";
 import usersRouter from "./users";
 import availabilityRouter from "./availability";
 import statsRouter from "./stats";
+import labRouter from "./lab";
+import pharmacyRouter from "./pharmacy";
 
 const router: IRouter = Router();
 
@@ -30,5 +32,7 @@ router.use(auditRouter);
 router.use(usersRouter);
 router.use(availabilityRouter);
 router.use(statsRouter);
+router.use(labRouter);
+router.use(pharmacyRouter);
 
 export default router;

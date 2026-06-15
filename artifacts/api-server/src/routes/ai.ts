@@ -1,38 +1,85 @@
 import { Router } from "express";
-import { db, appointmentsTable, usersTable, patientsTable, doctorsTable, medicalRecordsTable, prescriptionsTable, notificationsTable } from "@workspace/db";
+import { db, appointmentsTable, usersTable, patientsTable, doctorsTable, medicalRecordsTable, prescriptionsTable, labOrdersTable, labResultsTable } from "@workspace/db";
 import { count, eq, desc, and, gte } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { logAction } from "../lib/audit";
 
 const router = Router();
 
-function getOpenAIClient() {
-  const apiKey = process.env.OPENAI_API_KEY;
+// ── Multi-provider AI cascade ─────────────────────────────────────────────────
+
+function getAIClient(apiKey: string, baseURL?: string) {
   if (!apiKey) return null;
   try {
     const OpenAI = require("openai");
-    return new OpenAI.default({ apiKey });
+    return new OpenAI.default({ apiKey, baseURL });
   } catch {
     return null;
   }
 }
 
-async function callAI(messages: { role: string; content: string }[], systemPrompt: string): Promise<string | null> {
-  const client = getOpenAIClient();
+async function tryProvider(
+  client: any,
+  model: string,
+  messages: { role: string; content: string }[],
+  systemPrompt: string,
+  maxTokens = 1024,
+): Promise<string | null> {
   if (!client) return null;
   try {
     const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      max_tokens: 1024,
+      model,
+      max_tokens: maxTokens,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
     });
-    return response.choices[0]?.message?.content ?? null;
+    return response.choices?.[0]?.message?.content ?? null;
   } catch {
     return null;
   }
 }
 
-// ── GET /ai/insights/ — operational overview ──────────────────────────────────
+async function callAI(
+  messages: { role: string; content: string }[],
+  systemPrompt: string,
+  maxTokens = 1024,
+): Promise<{ text: string | null; provider: string }> {
+  // 1. Gemini (Google OpenAI-compatible endpoint)
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  if (geminiKey) {
+    const client = getAIClient(geminiKey, "https://generativelanguage.googleapis.com/v1beta/openai/");
+    const text = await tryProvider(client, geminiModel, messages, systemPrompt, maxTokens);
+    if (text) return { text, provider: "gemini" };
+  }
+
+  // 2. Groq
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey) {
+    const client = getAIClient(groqKey, "https://api.groq.com/openai/v1");
+    const text = await tryProvider(client, "llama-3.3-70b-versatile", messages, systemPrompt, maxTokens);
+    if (text) return { text, provider: "groq" };
+  }
+
+  // 3. OpenRouter
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (orKey) {
+    const client = getAIClient(orKey, "https://openrouter.ai/api/v1");
+    const text = await tryProvider(client, "meta-llama/llama-3.3-70b-instruct", messages, systemPrompt, maxTokens);
+    if (text) return { text, provider: "openrouter" };
+  }
+
+  // 4. OpenAI (fallback)
+  const oaiKey = process.env.OPENAI_API_KEY;
+  if (oaiKey) {
+    const client = getAIClient(oaiKey);
+    const text = await tryProvider(client, "gpt-4o-mini", messages, systemPrompt, maxTokens);
+    if (text) return { text, provider: "openai" };
+  }
+
+  return { text: null, provider: "none" };
+}
+
+// ── GET /ai/insights/ ──────────────────────────────────────────────────────────
 router.get("/ai/insights/", requireAuth, async (req, res) => {
   const today = new Date().toISOString().split("T")[0];
   const [apptCount] = await db.select({ count: count() }).from(appointmentsTable);
@@ -54,27 +101,9 @@ router.get("/ai/insights/", requireAuth, async (req, res) => {
 
   res.json({
     insights: [
-      {
-        id: 1,
-        type: "summary",
-        title: "System Overview",
-        content: `${doctorCount.count} active doctors, ${patientCount.count} patients, ${apptCount.count} total appointments. ${todayCount.count} appointments today.`,
-        priority: "low",
-      },
-      {
-        id: 2,
-        type: "alert",
-        title: "Pending Appointments",
-        content: `${pendingCount.count} appointments awaiting confirmation. Review and confirm to reduce no-shows.`,
-        priority: Number(pendingCount.count) > 5 ? "high" : "medium",
-      },
-      {
-        id: 3,
-        type: "recommendation",
-        title: "AI Health Assistant Active",
-        content: "Patients can use the AI health assistant for symptom guidance and appointment help. All AI outputs carry medical disclaimers.",
-        priority: "low",
-      },
+      { id: 1, type: "summary", title: "System Overview", content: `${doctorCount.count} active doctors, ${patientCount.count} patients, ${apptCount.count} total appointments. ${todayCount.count} appointments today.`, priority: "low" },
+      { id: 2, type: "alert", title: "Pending Appointments", content: `${pendingCount.count} appointments awaiting confirmation.`, priority: Number(pendingCount.count) > 5 ? "high" : "medium" },
+      { id: 3, type: "recommendation", title: "AI Multi-Provider Active", content: "AI services running with Gemini → Groq → OpenRouter → OpenAI failover cascade.", priority: "low" },
     ],
     stats: {
       total_appointments: apptCount.count,
@@ -85,6 +114,7 @@ router.get("/ai/insights/", requireAuth, async (req, res) => {
       high_risk_patients: highRisk,
       medium_risk_patients: mediumRisk,
     },
+    risk_summary: { high_risk_patients: highRisk, high_no_show_risk_appointments: Number(pendingCount.count) },
     no_show_predictions: noShowPredictions.map((r) => ({
       id: r.appt.id,
       patient_name: r.patient ? `${r.patient.firstName} ${r.patient.lastName}` : "Unknown",
@@ -96,89 +126,57 @@ router.get("/ai/insights/", requireAuth, async (req, res) => {
   });
 });
 
-// ── POST /ai/chat/ — patient health assistant chatbot ─────────────────────────
+// ── POST /ai/chat/ ─────────────────────────────────────────────────────────────
 router.post("/ai/chat/", requireAuth, async (req, res) => {
   const { message, history = [] } = req.body;
-  if (!message?.trim()) {
-    res.status(400).json({ detail: "message is required." });
-    return;
-  }
+  if (!message?.trim()) { res.status(400).json({ detail: "message is required." }); return; }
 
   const DISCLAIMER = "\n\n⚠️ *This is general wellness information only, not medical advice. Please consult a qualified doctor for diagnosis or treatment.*";
-
-  const systemPrompt = `You are a helpful hospital AI health assistant named MedAssist. You work for AetherCare Hospital.
-
-You can help patients with:
-- General wellness and lifestyle guidance
-- Understanding medical terms in simple language
-- Hospital FAQs (visiting hours, departments, services)
-- Help booking or rescheduling appointments
-- General first-aid guidance for minor issues
-
-You must NOT:
-- Provide a specific diagnosis
-- Prescribe or recommend specific medications
-- Replace a doctor's advice
-
-Always end health-related responses with a brief disclaimer. Be warm, clear, and professional.`;
+  const systemPrompt = `You are MedAssist, a helpful AI health assistant at AetherCare Hospital. Help patients with: general wellness guidance, understanding medical terms, hospital FAQs, appointment help, and general first-aid for minor issues. Never provide specific diagnoses or prescribe medications. Be warm, clear, and professional. End health-related responses with a brief disclaimer.`;
 
   const messages = [
     ...history.slice(-6).map((h: any) => ({ role: h.role, content: h.content })),
     { role: "user", content: message },
   ];
 
-  const aiReply = await callAI(messages, systemPrompt);
+  const { text: aiReply, provider } = await callAI(messages, systemPrompt);
 
   if (!aiReply) {
-    res.json({
-      reply: `Hello! I'm MedAssist, your AI health assistant. I'm here to help with general wellness questions, hospital information, and appointment help.\n\nOur AI service is currently being configured. In the meantime, please call our front desk or use the Appointments page to book a visit.${DISCLAIMER}`,
-      disclaimer: true,
-    });
+    res.json({ reply: `Hello! I'm MedAssist. Our AI service is currently being configured. Please call our front desk or use the Appointments page to book a visit.${DISCLAIMER}`, disclaimer: true, provider: "fallback" });
     return;
   }
 
   await logAction(req, "AI_CHAT", "ai_chat", undefined, `Patient chat: ${message.substring(0, 80)}`);
-  res.json({ reply: aiReply + DISCLAIMER, disclaimer: true });
+  res.json({ reply: aiReply + DISCLAIMER, disclaimer: true, provider });
 });
 
-// ── POST /ai/symptom-analyzer/ — patient symptom checker ──────────────────────
+// ── POST /ai/symptom-analyzer/ ─────────────────────────────────────────────────
 router.post("/ai/symptom-analyzer/", requireAuth, async (req, res) => {
   const { symptoms, age, gender, duration } = req.body;
-  if (!symptoms?.trim()) {
-    res.status(400).json({ detail: "symptoms is required." });
-    return;
-  }
+  if (!symptoms?.trim()) { res.status(400).json({ detail: "symptoms is required." }); return; }
 
-  const systemPrompt = `You are a clinical triage assistant helping patients understand their symptoms. 
-Analyze the given symptoms and return a JSON object with:
-- possible_conditions: array of 2-4 possible condition names (strings)
+  const systemPrompt = `You are a clinical triage assistant. Analyze symptoms and return ONLY valid JSON (no markdown) with:
+- possible_conditions: array of 2-4 possible condition names
 - risk_level: "low" | "medium" | "high" | "emergency"
-- recommendation: string with clear action advice
-- urgency: string describing how soon they should see a doctor
-- specialist: string with which type of doctor to see
-- warning_signs: array of red-flag symptoms to watch for
-
-Be conservative — when in doubt, recommend higher urgency. Never give a definitive diagnosis.
-Return ONLY valid JSON, no markdown.`;
+- recommendation: clear action advice
+- urgency: how soon to see a doctor
+- specialist: which type of doctor
+- warning_signs: array of red-flag symptoms
+Be conservative — when in doubt, recommend higher urgency. Never give a definitive diagnosis.`;
 
   const userMsg = `Symptoms: ${symptoms}${age ? `. Age: ${age}` : ""}${gender ? `. Gender: ${gender}` : ""}${duration ? `. Duration: ${duration}` : ""}`;
-
-  const aiResponse = await callAI([{ role: "user", content: userMsg }], systemPrompt);
+  const { text: aiResponse, provider } = await callAI([{ role: "user", content: userMsg }], systemPrompt);
 
   let result;
   if (aiResponse) {
-    try {
-      result = JSON.parse(aiResponse);
-    } catch {
-      result = null;
-    }
+    try { result = JSON.parse(aiResponse.replace(/```json\n?|\n?```/g, "").trim()); } catch { result = null; }
   }
 
   if (!result) {
     result = {
       possible_conditions: ["Unable to analyze — AI service unavailable"],
       risk_level: "medium",
-      recommendation: "Please consult a doctor for proper evaluation of your symptoms.",
+      recommendation: "Please consult a doctor for proper evaluation.",
       urgency: "Within 24-48 hours",
       specialist: "General Practitioner",
       warning_signs: ["Worsening symptoms", "High fever", "Difficulty breathing"],
@@ -186,117 +184,146 @@ Return ONLY valid JSON, no markdown.`;
   }
 
   await logAction(req, "SYMPTOM_ANALYSIS", "ai_symptom", undefined, `Symptoms: ${symptoms.substring(0, 80)}`);
-  res.json({
-    ...result,
-    disclaimer: "This is not a medical diagnosis. Always consult a qualified healthcare professional.",
-  });
+  res.json({ ...result, disclaimer: "⚠️ AI-generated — not a medical diagnosis. Always consult a qualified healthcare professional.", provider: provider ?? "fallback" });
 });
 
-// ── POST /ai/doctor-assistant/ — doctor AI co-pilot ──────────────────────────
+// ── POST /ai/doctor-assistant/ ─────────────────────────────────────────────────
 router.post("/ai/doctor-assistant/", requireAuth, requireRole("doctor", "admin"), async (req, res) => {
   const { task, patient_id, context } = req.body;
-  if (!task) {
-    res.status(400).json({ detail: "task is required." });
-    return;
-  }
+  if (!task) { res.status(400).json({ detail: "task is required." }); return; }
 
   let patientContext = "";
   if (patient_id) {
-    const records = await db
-      .select()
-      .from(medicalRecordsTable)
-      .where(eq(medicalRecordsTable.patientId, Number(patient_id)))
-      .orderBy(desc(medicalRecordsTable.createdAt))
-      .limit(5);
-
-    const rxList = await db
-      .select()
-      .from(prescriptionsTable)
-      .where(eq(prescriptionsTable.patientId, Number(patient_id)))
-      .orderBy(desc(prescriptionsTable.createdAt))
-      .limit(3);
-
-    if (records.length) {
-      patientContext = `\n\nRecent Medical Records:\n${records.map((r) =>
-        `- Diagnosis: ${r.diagnosis}, Treatment: ${r.treatment}, Notes: ${r.notes}`
-      ).join("\n")}`;
-    }
-    if (rxList.length) {
-      patientContext += `\n\nRecent Prescriptions:\n${rxList.map((r) =>
-        `- Status: ${r.status}, Instructions: ${r.instructions}`
-      ).join("\n")}`;
-    }
+    const records = await db.select().from(medicalRecordsTable).where(eq(medicalRecordsTable.patientId, Number(patient_id))).orderBy(desc(medicalRecordsTable.createdAt)).limit(5);
+    const rxList = await db.select().from(prescriptionsTable).where(eq(prescriptionsTable.patientId, Number(patient_id))).orderBy(desc(prescriptionsTable.createdAt)).limit(3);
+    if (records.length) patientContext = `\n\nRecent Medical Records:\n${records.map((r) => `- Diagnosis: ${r.diagnosis}, Assessment: ${r.assessment || ""}, Plan: ${r.plan || ""}, Notes: ${r.notes}`).join("\n")}`;
+    if (rxList.length) patientContext += `\n\nRecent Prescriptions:\n${rxList.map((r) => `- Status: ${r.status}, Instructions: ${r.instructions}`).join("\n")}`;
   }
 
-  const systemPrompt = `You are an AI clinical assistant helping a licensed doctor at AetherCare Hospital.
-Your role is to support (never replace) the doctor's clinical judgment by:
-- Summarizing patient history concisely
-- Suggesting possible differential diagnoses based on presented data
-- Referencing standard treatment guidelines
-- Generating structured clinical notes
+  const systemPrompt = `You are an AI clinical co-pilot assisting a licensed doctor at AetherCare Hospital. Support (never replace) clinical judgment by: summarizing patient history, suggesting differential diagnoses, referencing treatment guidelines, and generating structured clinical notes. Be precise, evidence-based, and flag critical findings prominently. All AI suggestions require clinical validation.${patientContext}`;
 
-Always be precise, evidence-based, and use medical terminology appropriately. 
-Flag any critical findings prominently.
-Remind the doctor that all AI suggestions require their clinical validation before use.${patientContext}`;
-
-  const messages = [{ role: "user", content: `Task: ${task}${context ? `\n\nContext: ${context}` : ""}` }];
-
-  const aiResponse = await callAI(messages, systemPrompt);
+  const { text: aiResponse, provider } = await callAI([{ role: "user", content: `Task: ${task}${context ? `\n\nContext: ${context}` : ""}` }], systemPrompt, 2048);
 
   await logAction(req, "DOCTOR_AI_ASSIST", "ai_doctor", patient_id ? Number(patient_id) : undefined, `Task: ${task.substring(0, 80)}`);
-
   res.json({
     result: aiResponse ?? "AI service is currently unavailable. Please proceed with standard clinical protocols.",
-    disclaimer: "AI-generated content requires doctor validation before clinical use.",
+    disclaimer: "⚠️ AI Generated — Doctor Verification Required before clinical use.",
+    provider: provider ?? "fallback",
   });
 });
 
-// ── POST /ai/summarize-report/ — report summarizer ───────────────────────────
+// ── POST /ai/summarize-report/ ─────────────────────────────────────────────────
 router.post("/ai/summarize-report/", requireAuth, requireRole("doctor", "admin"), async (req, res) => {
   const { report_text, report_type = "general" } = req.body;
-  if (!report_text?.trim()) {
-    res.status(400).json({ detail: "report_text is required." });
-    return;
-  }
+  if (!report_text?.trim()) { res.status(400).json({ detail: "report_text is required." }); return; }
 
-  const systemPrompt = `You are a medical report summarizer at AetherCare Hospital.
-
-Generate TWO summaries of the provided medical report:
-1. A patient-friendly summary (plain language, no jargon, reassuring tone)
-2. A clinical summary for the doctor (concise, highlights key findings, flags abnormalities)
-
-Return JSON with:
-- patient_summary: string
-- clinical_summary: string
-- key_findings: array of strings (bullet points)
+  const systemPrompt = `You are a medical report summarizer. Generate TWO summaries and return ONLY valid JSON (no markdown):
+- patient_summary: plain-language summary for patient
+- clinical_summary: concise summary for the doctor with key findings flagged
+- key_findings: array of bullet point strings
 - follow_up_recommended: boolean
-- follow_up_reason: string (if follow_up_recommended is true)
+- follow_up_reason: string`;
 
-Return ONLY valid JSON.`;
-
-  const aiResponse = await callAI([{ role: "user", content: `Report Type: ${report_type}\n\nReport:\n${report_text}` }], systemPrompt);
+  const { text: aiResponse, provider } = await callAI([{ role: "user", content: `Report Type: ${report_type}\n\nReport:\n${report_text}` }], systemPrompt);
 
   let result;
   if (aiResponse) {
-    try {
-      result = JSON.parse(aiResponse);
-    } catch {
-      result = null;
-    }
+    try { result = JSON.parse(aiResponse.replace(/```json\n?|\n?```/g, "").trim()); } catch { result = null; }
   }
-
   if (!result) {
-    result = {
-      patient_summary: "Your medical report has been received. Please discuss the results with your doctor at your next appointment.",
-      clinical_summary: "AI summarization unavailable. Please review the full report manually.",
-      key_findings: ["Manual review required"],
-      follow_up_recommended: true,
-      follow_up_reason: "Standard clinical review",
-    };
+    result = { patient_summary: "Your medical report has been received. Please discuss results with your doctor.", clinical_summary: "AI summarization unavailable. Please review the full report manually.", key_findings: ["Manual review required"], follow_up_recommended: true, follow_up_reason: "Standard clinical review" };
   }
 
   await logAction(req, "REPORT_SUMMARIZE", "ai_report");
-  res.json(result);
+  res.json({ ...result, provider: provider ?? "fallback" });
+});
+
+// ── POST /ai/icd-suggest/ — ICD-10 code suggestions ──────────────────────────
+router.post("/ai/icd-suggest/", requireAuth, requireRole("doctor", "admin"), async (req, res) => {
+  const { diagnosis, symptoms, context: ctx } = req.body;
+  if (!diagnosis && !symptoms) { res.status(400).json({ detail: "diagnosis or symptoms is required." }); return; }
+
+  const systemPrompt = `You are a medical coding assistant specializing in ICD-10-CM coding. Return ONLY valid JSON (no markdown) with:
+- suggestions: array of up to 5 objects, each with { code, description, confidence: "high"|"medium"|"low", notes }
+- primary_code: the most likely ICD-10 code string
+- coding_notes: string with important coding guidance
+Base suggestions on clinical accuracy and specificity.`;
+
+  const input = `Diagnosis/Complaint: ${diagnosis || ""}\nSymptoms: ${symptoms || ""}\nAdditional Context: ${ctx || ""}`;
+  const { text: aiResponse, provider } = await callAI([{ role: "user", content: input }], systemPrompt);
+
+  let result;
+  if (aiResponse) {
+    try { result = JSON.parse(aiResponse.replace(/```json\n?|\n?```/g, "").trim()); } catch { result = null; }
+  }
+  if (!result) {
+    result = { suggestions: [], primary_code: "", coding_notes: "AI coding service unavailable. Please consult a certified medical coder." };
+  }
+
+  await logAction(req, "ICD_SUGGEST", "ai_icd");
+  res.json({ ...result, disclaimer: "⚠️ AI Generated — Verify all ICD codes before submission.", provider: provider ?? "fallback" });
+});
+
+// ── POST /ai/lab-interpret/ — AI lab result interpretation ────────────────────
+router.post("/ai/lab-interpret/", requireAuth, requireRole("doctor", "admin", "lab_tech"), async (req, res) => {
+  const { lab_order_id, results, patient_context } = req.body;
+  if (!results || !Array.isArray(results) || results.length === 0) {
+    res.status(400).json({ detail: "results array is required." }); return;
+  }
+
+  const systemPrompt = `You are a clinical laboratory interpretation assistant at AetherCare Hospital. Analyze lab results and return ONLY valid JSON (no markdown) with:
+- overall_summary: string — brief overall interpretation
+- findings: array of objects { test_name, value, unit, reference_range, status: "normal"|"abnormal"|"critical", interpretation, clinical_significance }
+- critical_alerts: array of strings — any critical/panic values requiring immediate action
+- clinical_recommendations: array of strings — suggested follow-up actions
+- follow_up_tests: array of strings — suggested additional tests if needed
+Flag all abnormal and critical values prominently. Be clinically precise.`;
+
+  const resultsText = results.map((r: any) => `${r.test_name}: ${r.result_value} ${r.unit || ""} (Ref: ${r.reference_range || "N/A"})`).join("\n");
+  const input = `Lab Results:\n${resultsText}${patient_context ? `\n\nPatient Context: ${patient_context}` : ""}`;
+
+  const { text: aiResponse, provider } = await callAI([{ role: "user", content: input }], systemPrompt, 2048);
+
+  let result;
+  if (aiResponse) {
+    try { result = JSON.parse(aiResponse.replace(/```json\n?|\n?```/g, "").trim()); } catch { result = null; }
+  }
+  if (!result) {
+    result = { overall_summary: "AI interpretation unavailable.", findings: [], critical_alerts: [], clinical_recommendations: ["Manual review required"], follow_up_tests: [] };
+  }
+
+  if (lab_order_id) {
+    await logAction(req, "LAB_INTERPRET", "lab_order", Number(lab_order_id));
+  }
+
+  res.json({ ...result, disclaimer: "⚠️ AI Generated — Doctor Verification Required before clinical use.", provider: provider ?? "fallback" });
+});
+
+// ── POST /ai/soap-generate/ — generate SOAP note from input ──────────────────
+router.post("/ai/soap-generate/", requireAuth, requireRole("doctor", "admin"), async (req, res) => {
+  const { chief_complaint, history, exam_findings, patient_id } = req.body;
+  if (!chief_complaint) { res.status(400).json({ detail: "chief_complaint is required." }); return; }
+
+  const systemPrompt = `You are a clinical documentation assistant. Generate a structured SOAP note and return ONLY valid JSON (no markdown) with:
+- subjective: string — patient's chief complaint, history of present illness, review of systems
+- objective: string — physical examination findings, vital signs, investigations
+- assessment: string — diagnosis/differential diagnoses with ICD context
+- plan: string — treatment plan, medications, referrals, follow-up
+Be concise, clinically accurate, and use medical terminology appropriately.`;
+
+  const input = `Chief Complaint: ${chief_complaint}\nHistory: ${history || "Not provided"}\nExamination Findings: ${exam_findings || "Not provided"}`;
+  const { text: aiResponse, provider } = await callAI([{ role: "user", content: input }], systemPrompt, 2048);
+
+  let result;
+  if (aiResponse) {
+    try { result = JSON.parse(aiResponse.replace(/```json\n?|\n?```/g, "").trim()); } catch { result = null; }
+  }
+  if (!result) {
+    result = { subjective: "", objective: "", assessment: "", plan: "" };
+  }
+
+  await logAction(req, "SOAP_GENERATE", "ai_soap", patient_id ? Number(patient_id) : undefined);
+  res.json({ ...result, disclaimer: "⚠️ AI Generated — Doctor Verification Required.", provider: provider ?? "fallback" });
 });
 
 export default router;

@@ -1,2 +1,4 @@
 - [AI key strategy](ai-integration.md) — Replit OpenAI integration requires paid upgrade; always use OPENAI_API_KEY secret instead. AI routes degrade gracefully when absent.
 - [RBAC security decisions](rbac-decisions.md) — Self-registration is always locked to role=patient server-side. JWT_SECRET throws at production startup if absent.
+- [Lab & Pharmacy modules](lab-pharmacy-modules.md) — Full clinical modules added (lab orders, pharmacy inventory, dispensing); schema, backend routes, and frontend pages all in place.
+- [AI multi-provider cascade](ai-providers.md) — Gemini → Groq → OpenRouter → OpenAI failover; all use OpenAI SDK with different baseURL. Models: gemini-2.5-flash, llama-3.3-70b-versatile, meta-llama/llama-3.3-70b-instruct, gpt-4o-mini.

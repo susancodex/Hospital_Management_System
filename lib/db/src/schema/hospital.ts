@@ -59,10 +59,19 @@ export const medicalRecordsTable = pgTable("medical_records", {
   patientId: integer("patient_id").references(() => usersTable.id),
   doctorId: integer("doctor_id").references(() => usersTable.id),
   appointmentId: integer("appointment_id").references(() => appointmentsTable.id),
+  visitType: varchar("visit_type", { length: 50 }).default("consultation"),
+  // Legacy flat fields (kept for backward compat)
   diagnosis: text("diagnosis").notNull().default(""),
   treatment: text("treatment").default(""),
   prescription: text("prescription").default(""),
   notes: text("notes").default(""),
+  // SOAP note structure
+  subjective: text("subjective").default(""),
+  objective: text("objective").default(""),
+  assessment: text("assessment").default(""),
+  plan: text("plan").default(""),
+  // Vital signs
+  vitalSigns: jsonb("vital_signs").default({}),
   status: varchar("status", { length: 30 }).notNull().default("draft"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -153,6 +162,78 @@ export const doctorAvailabilityTable = pgTable("doctor_availability", {
   isActive: boolean("is_active").notNull().default(true),
 });
 
+// ── LAB ORDERS ──────────────────────────────────────────────────────────────
+
+export const labOrdersTable = pgTable("lab_orders", {
+  id: serial("id").primaryKey(),
+  orderNumber: varchar("order_number", { length: 30 }).notNull().unique(),
+  patientId: integer("patient_id").references(() => usersTable.id),
+  doctorId: integer("doctor_id").references(() => usersTable.id),
+  appointmentId: integer("appointment_id").references(() => appointmentsTable.id),
+  tests: jsonb("tests").notNull().default([]),
+  status: varchar("status", { length: 30 }).notNull().default("pending"),
+  priority: varchar("priority", { length: 20 }).notNull().default("routine"),
+  clinicalNotes: text("clinical_notes").default(""),
+  collectedAt: timestamp("collected_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [index("lab_orders_patient_idx").on(t.patientId)]);
+
+export const labResultsTable = pgTable("lab_results", {
+  id: serial("id").primaryKey(),
+  labOrderId: integer("lab_order_id").references(() => labOrdersTable.id, { onDelete: "cascade" }),
+  patientId: integer("patient_id").references(() => usersTable.id),
+  testName: varchar("test_name", { length: 200 }).notNull(),
+  testCode: varchar("test_code", { length: 50 }).default(""),
+  resultValue: text("result_value").default(""),
+  unit: varchar("unit", { length: 50 }).default(""),
+  referenceRange: varchar("reference_range", { length: 100 }).default(""),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  abnormalFlag: varchar("abnormal_flag", { length: 10 }).default(""),
+  aiInterpretation: text("ai_interpretation").default(""),
+  reviewedBy: integer("reviewed_by").references(() => usersTable.id),
+  reportedAt: timestamp("reported_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("lab_results_order_idx").on(t.labOrderId)]);
+
+// ── PHARMACY ────────────────────────────────────────────────────────────────
+
+export const pharmacyInventoryTable = pgTable("pharmacy_inventory", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 300 }).notNull(),
+  genericName: varchar("generic_name", { length: 300 }).default(""),
+  category: varchar("category", { length: 100 }).default(""),
+  dosageForm: varchar("dosage_form", { length: 50 }).default("tablet"),
+  strength: varchar("strength", { length: 100 }).default(""),
+  quantityInStock: integer("quantity_in_stock").notNull().default(0),
+  unit: varchar("unit", { length: 30 }).default("tablets"),
+  reorderLevel: integer("reorder_level").notNull().default(10),
+  expiryDate: date("expiry_date"),
+  manufacturer: varchar("manufacturer", { length: 200 }).default(""),
+  batchNumber: varchar("batch_number", { length: 100 }).default(""),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).default("0"),
+  isControlled: boolean("is_controlled").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const pharmacyDispensingTable = pgTable("pharmacy_dispensing", {
+  id: serial("id").primaryKey(),
+  prescriptionId: integer("prescription_id").references(() => prescriptionsTable.id),
+  patientId: integer("patient_id").references(() => usersTable.id),
+  dispensedBy: integer("dispensed_by").references(() => usersTable.id),
+  items: jsonb("items").notNull().default([]),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).default("0"),
+  status: varchar("status", { length: 30 }).notNull().default("pending"),
+  notes: text("notes").default(""),
+  dispensedAt: timestamp("dispensed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── SCHEMAS & TYPES ──────────────────────────────────────────────────────────
+
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertDoctorSchema = createInsertSchema(doctorsTable).omit({ id: true, createdAt: true });
 export const insertPatientSchema = createInsertSchema(patientsTable).omit({ id: true, createdAt: true });
@@ -164,6 +245,10 @@ export const insertBillingPaymentSchema = createInsertSchema(billingPaymentsTabl
 export const insertPrescriptionSchema = createInsertSchema(prescriptionsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertNotificationSchema = createInsertSchema(notificationsTable).omit({ id: true, createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogsTable).omit({ id: true, createdAt: true });
+export const insertLabOrderSchema = createInsertSchema(labOrdersTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertLabResultSchema = createInsertSchema(labResultsTable).omit({ id: true, createdAt: true });
+export const insertPharmacyInventorySchema = createInsertSchema(pharmacyInventoryTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPharmacyDispensingSchema = createInsertSchema(pharmacyDispensingTable).omit({ id: true, createdAt: true });
 
 export type User = typeof usersTable.$inferSelect;
 export type Doctor = typeof doctorsTable.$inferSelect;
@@ -177,3 +262,7 @@ export type Prescription = typeof prescriptionsTable.$inferSelect;
 export type Notification = typeof notificationsTable.$inferSelect;
 export type AuditLog = typeof auditLogsTable.$inferSelect;
 export type DoctorAvailability = typeof doctorAvailabilityTable.$inferSelect;
+export type LabOrder = typeof labOrdersTable.$inferSelect;
+export type LabResult = typeof labResultsTable.$inferSelect;
+export type PharmacyInventory = typeof pharmacyInventoryTable.$inferSelect;
+export type PharmacyDispensing = typeof pharmacyDispensingTable.$inferSelect;

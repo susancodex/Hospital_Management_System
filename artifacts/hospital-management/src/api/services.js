@@ -179,6 +179,38 @@ export const aiAPI = {
   analyzeSymptoms: (data) => apiClient.post('/ai/symptom-analyzer/', data),
   doctorAssistant: (data) => apiClient.post('/ai/doctor-assistant/', data),
   summarizeReport: (data) => apiClient.post('/ai/summarize-report/', data),
+  icdSuggest: (data) => apiClient.post('/ai/icd-suggest/', data),
+  labInterpret: (data) => apiClient.post('/ai/lab-interpret/', data),
+  soapGenerate: (data) => apiClient.post('/ai/soap-generate/', data),
+};
+
+export const labOrdersAPI = {
+  list: async (params) => {
+    const response = await apiClient.get(`/lab-orders/${toQueryParams(params)}`);
+    return { ...response, items: unwrapList(response) };
+  },
+  create: (data) => apiClient.post('/lab-orders/', data),
+  retrieve: (id) => apiClient.get(`/lab-orders/${id}/`),
+  update: (id, data) => apiClient.put(`/lab-orders/${id}/`, data),
+  addResults: (id, data) => apiClient.post(`/lab-orders/${id}/results/`, data),
+  delete: (id) => apiClient.delete(`/lab-orders/${id}/`),
+};
+
+export const pharmacyAPI = {
+  listInventory: async (params) => {
+    const response = await apiClient.get(`/pharmacy/inventory/${toQueryParams(params)}`);
+    return { ...response, items: unwrapList(response) };
+  },
+  createInventory: (data) => apiClient.post('/pharmacy/inventory/', data),
+  retrieveInventory: (id) => apiClient.get(`/pharmacy/inventory/${id}/`),
+  updateInventory: (id, data) => apiClient.put(`/pharmacy/inventory/${id}/`, data),
+  deleteInventory: (id) => apiClient.delete(`/pharmacy/inventory/${id}/`),
+  getLowStock: () => apiClient.get('/pharmacy/low-stock/'),
+  listDispensing: async (params) => {
+    const response = await apiClient.get(`/pharmacy/dispense/${toQueryParams(params)}`);
+    return { ...response, items: unwrapList(response) };
+  },
+  dispense: (data) => apiClient.post('/pharmacy/dispense/', data),
 };
 
 export const usersAdminAPI = {
