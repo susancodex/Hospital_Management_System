@@ -1,4 +1,4 @@
-import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, Settings, ChevronLeft, ChevronRight, BrainCircuit } from 'lucide-react';
+import { Activity, CalendarDays, CreditCard, FileText, LayoutDashboard, Stethoscope, UserCircle2, Users, X, ChevronLeft, ChevronRight, BrainCircuit, Pill, ShieldCheck, MessageSquare } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { hasPermission } from '../lib/permissions.js';
@@ -12,25 +12,29 @@ const menuConfig = {
     { label: 'Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
     { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
-    { label: 'AI Triage', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
+    { label: 'Prescriptions', path: '/prescriptions', icon: Pill, permission: 'medicalRecords.view' },
+    { label: 'AI Centre', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
+    { label: 'Audit Logs', path: '/audit-logs', icon: ShieldCheck, permission: 'aiInsights.view' },
   ],
   doctor: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
-    { label: 'Patients', path: '/patients', icon: Users, permission: 'patients.view' },
-    { label: 'Doctors', path: '/doctors', icon: Stethoscope, permission: 'doctors.view' },
-    { label: 'My Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
+    { label: 'My Patients', path: '/patients', icon: Users, permission: 'patients.view' },
+    { label: 'Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
     { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
-    { label: 'AI Triage', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
+    { label: 'Prescriptions', path: '/prescriptions', icon: Pill, permission: 'medicalRecords.view' },
+    { label: 'AI Assistant', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
   ],
   patient: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
     { label: 'My Record', path: '/patients', icon: Users, permission: 'patients.view' },
-    { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },
     { label: 'Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
+    { label: 'Medical Records', path: '/medical-records', icon: FileText, permission: 'medicalRecords.view' },
+    { label: 'My Prescriptions', path: '/prescriptions', icon: Pill, permission: 'medicalRecords.view' },
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
+    { label: 'Health Assistant', path: '/ai-triage', icon: MessageSquare, permission: 'dashboard.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
   ],
   reception: [
@@ -39,7 +43,6 @@ const menuConfig = {
     { label: 'Doctors', path: '/doctors', icon: Stethoscope, permission: 'doctors.view' },
     { label: 'Appointments', path: '/appointments', icon: CalendarDays, permission: 'appointments.view' },
     { label: 'Medical Reports', path: '/medical-reports', icon: Activity, permission: 'medicalReports.view' },
-    { label: 'AI Triage', path: '/ai-triage', icon: BrainCircuit, permission: 'aiInsights.view' },
     { label: 'Billing', path: '/billing', icon: CreditCard, permission: 'billing.view' },
   ],
 };
@@ -119,12 +122,10 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Desktop sidebar */}
       <aside className={`sticky top-0 hidden h-screen shrink-0 lg:flex lg:flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-[width] duration-200 ${widthClass}`}>
         {content}
       </aside>
 
-      {/* Mobile drawer */}
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" onClick={closeMobileSidebar}>
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" />

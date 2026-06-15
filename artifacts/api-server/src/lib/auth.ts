@@ -53,6 +53,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     res.status(401).json({ detail: "User not found." });
     return;
   }
+  if (!user.isActive) {
+    res.status(403).json({ detail: "Account is deactivated." });
+    return;
+  }
   req.user = {
     id: user.id,
     username: user.username,
@@ -62,6 +66,20 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     lastName: user.lastName,
   };
   next();
+}
+
+export function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      res.status(401).json({ detail: "Authentication required." });
+      return;
+    }
+    if (!roles.includes(req.user.role)) {
+      res.status(403).json({ detail: `Access denied. Required role: ${roles.join(" or ")}.` });
+      return;
+    }
+    next();
+  };
 }
 
 export function formatUser(user: typeof usersTable.$inferSelect) {

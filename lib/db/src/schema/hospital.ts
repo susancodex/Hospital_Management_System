@@ -1,6 +1,5 @@
-import { pgTable, text, serial, integer, timestamp, varchar, date, boolean, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, varchar, date, boolean, decimal, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -64,6 +63,7 @@ export const medicalRecordsTable = pgTable("medical_records", {
   treatment: text("treatment").default(""),
   prescription: text("prescription").default(""),
   notes: text("notes").default(""),
+  status: varchar("status", { length: 30 }).notNull().default("draft"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -76,6 +76,9 @@ export const medicalReportsTable = pgTable("medical_reports", {
   reportType: varchar("report_type", { length: 100 }).default(""),
   fileUrl: text("file_url").default(""),
   description: text("description").default(""),
+  status: varchar("status", { length: 30 }).notNull().default("draft"),
+  findings: text("findings").default(""),
+  recommendations: text("recommendations").default(""),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -89,6 +92,8 @@ export const billingTable = pgTable("billing", {
   description: text("description").default(""),
   invoiceDate: date("invoice_date").defaultNow(),
   dueDate: date("due_date"),
+  insuranceProvider: varchar("insurance_provider", { length: 200 }).default(""),
+  claimNumber: varchar("claim_number", { length: 100 }).default(""),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -102,6 +107,52 @@ export const billingPaymentsTable = pgTable("billing_payments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const prescriptionsTable = pgTable("prescriptions", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patient_id").references(() => usersTable.id),
+  doctorId: integer("doctor_id").references(() => usersTable.id),
+  appointmentId: integer("appointment_id").references(() => appointmentsTable.id),
+  medicines: jsonb("medicines").notNull().default([]),
+  instructions: text("instructions").default(""),
+  status: varchar("status", { length: 30 }).notNull().default("active"),
+  validUntil: date("valid_until"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const notificationsTable = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => usersTable.id),
+  title: varchar("title", { length: 200 }).notNull(),
+  message: text("message").notNull(),
+  type: varchar("type", { length: 50 }).notNull().default("info"),
+  isRead: boolean("is_read").notNull().default(false),
+  relatedType: varchar("related_type", { length: 50 }),
+  relatedId: integer("related_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const auditLogsTable = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => usersTable.id),
+  action: varchar("action", { length: 100 }).notNull(),
+  resource: varchar("resource", { length: 100 }),
+  resourceId: integer("resource_id"),
+  details: text("details"),
+  ipAddress: varchar("ip_address", { length: 50 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const doctorAvailabilityTable = pgTable("doctor_availability", {
+  id: serial("id").primaryKey(),
+  doctorId: integer("doctor_id").references(() => usersTable.id),
+  dayOfWeek: integer("day_of_week").notNull(),
+  startTime: varchar("start_time", { length: 10 }).notNull(),
+  endTime: varchar("end_time", { length: 10 }).notNull(),
+  slotDuration: integer("slot_duration").notNull().default(30),
+  isActive: boolean("is_active").notNull().default(true),
+});
+
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertDoctorSchema = createInsertSchema(doctorsTable).omit({ id: true, createdAt: true });
 export const insertPatientSchema = createInsertSchema(patientsTable).omit({ id: true, createdAt: true });
@@ -110,6 +161,9 @@ export const insertMedicalRecordSchema = createInsertSchema(medicalRecordsTable)
 export const insertMedicalReportSchema = createInsertSchema(medicalReportsTable).omit({ id: true, createdAt: true });
 export const insertBillingSchema = createInsertSchema(billingTable).omit({ id: true, createdAt: true });
 export const insertBillingPaymentSchema = createInsertSchema(billingPaymentsTable).omit({ id: true, createdAt: true });
+export const insertPrescriptionSchema = createInsertSchema(prescriptionsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertNotificationSchema = createInsertSchema(notificationsTable).omit({ id: true, createdAt: true });
+export const insertAuditLogSchema = createInsertSchema(auditLogsTable).omit({ id: true, createdAt: true });
 
 export type User = typeof usersTable.$inferSelect;
 export type Doctor = typeof doctorsTable.$inferSelect;
@@ -119,3 +173,7 @@ export type MedicalRecord = typeof medicalRecordsTable.$inferSelect;
 export type MedicalReport = typeof medicalReportsTable.$inferSelect;
 export type Billing = typeof billingTable.$inferSelect;
 export type BillingPayment = typeof billingPaymentsTable.$inferSelect;
+export type Prescription = typeof prescriptionsTable.$inferSelect;
+export type Notification = typeof notificationsTable.$inferSelect;
+export type AuditLog = typeof auditLogsTable.$inferSelect;
+export type DoctorAvailability = typeof doctorAvailabilityTable.$inferSelect;

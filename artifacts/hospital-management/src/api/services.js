@@ -52,31 +52,18 @@ const patchWithFallback = async (primaryUrl, fallbackUrl, payload, config) => {
 
 export const authAPI = {
   getAuthConfig: () => apiClient.get('/auth-config/'),
-
-  login: (username, password) =>
-    postWithFallback('/token/', null, { username, password }),
-
+  login: (username, password) => postWithFallback('/token/', null, { username, password }),
   register: (data) => postWithFallback('/register/', null, data),
-
-  googleLogin: (credential) =>
-    apiClient.post('/google-login/', { credential }),
-
-  refreshToken: (refresh) =>
-    apiClient.post('/token/refresh/', { refresh }),
-
+  googleLogin: (credential) => apiClient.post('/google-login/', { credential }),
+  refreshToken: (refresh) => apiClient.post('/token/refresh/', { refresh }),
   forgotPassword: (data) => apiClient.post('/forgot-password/', data),
-
   changePassword: (data) => apiClient.post('/change-password/', data),
-
   getProfile: () => getWithFallback('/profile/', null),
-
   me: () => apiClient.get('/users/me/'),
-
   updateProfile: (formData) =>
     patchWithFallback('/profile/', null, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-
   logout: () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
@@ -164,6 +151,34 @@ export const billingPaymentsAPI = {
   verify: (id, payload = {}) => apiClient.post(`/billing-payments/${id}/verify/`, payload),
 };
 
+export const prescriptionsAPI = {
+  list: async (params) => {
+    const response = await apiClient.get(`/prescriptions/${toQueryParams(params)}`);
+    return { ...response, items: unwrapList(response) };
+  },
+  create: (data) => apiClient.post('/prescriptions/', data),
+  retrieve: (id) => apiClient.get(`/prescriptions/${id}/`),
+  update: (id, data) => apiClient.put(`/prescriptions/${id}/`, data),
+  delete: (id) => apiClient.delete(`/prescriptions/${id}/`),
+};
+
+export const notificationsAPI = {
+  list: () => apiClient.get('/notifications/'),
+  markRead: (ids) => apiClient.post('/notifications/mark-read/', ids ? { ids } : {}),
+  delete: (id) => apiClient.delete(`/notifications/${id}/`),
+};
+
+export const auditAPI = {
+  list: (params) => apiClient.get(`/audit-logs/${toQueryParams(params)}`),
+};
+
 export const insightsAPI = {
   getAiInsights: () => apiClient.get('/ai/insights/'),
+};
+
+export const aiAPI = {
+  chat: (message, history = []) => apiClient.post('/ai/chat/', { message, history }),
+  analyzeSymptoms: (data) => apiClient.post('/ai/symptom-analyzer/', data),
+  doctorAssistant: (data) => apiClient.post('/ai/doctor-assistant/', data),
+  summarizeReport: (data) => apiClient.post('/ai/summarize-report/', data),
 };

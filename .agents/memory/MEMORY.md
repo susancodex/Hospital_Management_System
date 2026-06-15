@@ -1,0 +1,2 @@
+- [AI features require OPENAI_API_KEY](ai-integration.md) — Replit OpenAI integration requires upgrade; use user's own OPENAI_API_KEY secret instead. AI routes gracefully degrade when key is missing.
+- [New tables added post-migration](new-tables.md) — prescriptions, notifications, audit_logs, doctor_availability added via SQL; Drizzle schema updated; db push applied.

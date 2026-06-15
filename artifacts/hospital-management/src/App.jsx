@@ -17,6 +17,8 @@ import AiTriage from './pages/AiTriage.jsx';
 import Patients from './pages/Patients.jsx';
 import Profile from './pages/Profile.jsx';
 import Register from './pages/Register.jsx';
+import Prescriptions from './pages/Prescriptions.jsx';
+import AuditLogs from './pages/AuditLogs.jsx';
 
 import { Component } from 'react';
 
@@ -83,6 +85,8 @@ function App() {
             <Route path="/ai-triage" element={<AiTriage />} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/prescriptions" element={<Prescriptions />} />
+            <Route path="/audit-logs" element={<AuditLogs />} />
           </Route>
 
           <Route path="/unauthorized" element={<Unauthorized />} />
