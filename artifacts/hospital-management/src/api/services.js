@@ -182,6 +182,7 @@ export const aiAPI = {
   icdSuggest: (data) => apiClient.post('/ai/icd-suggest/', data),
   labInterpret: (data) => apiClient.post('/ai/lab-interpret/', data),
   soapGenerate: (data) => apiClient.post('/ai/soap-generate/', data),
+  getStatus: (ping = false) => apiClient.get(`/ai/status/${ping ? '?ping=true' : ''}`),
 };
 
 export const labOrdersAPI = {

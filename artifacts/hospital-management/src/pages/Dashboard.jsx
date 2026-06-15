@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 import { appointmentsAPI, insightsAPI, statsAPI, patientsAPI } from '../api/services.js';
 import StatusBadge from '../components/common/StatusBadge.jsx';
 import { useAuthStore } from '../store/authStore.js';
+import AiProviderStatus from '../components/AiProviderStatus.jsx';
 
 const fmtShortDate = (value) => {
   if (!value) return '—';
@@ -252,6 +253,8 @@ function AdminDashboard({ user }) {
               </div>
             </div>
           )}
+
+          <AiProviderStatus />
 
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-5 space-y-3">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Admin Quick Links</h3>

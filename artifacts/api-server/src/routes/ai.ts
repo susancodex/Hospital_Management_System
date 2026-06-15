@@ -10,6 +10,20 @@ const router = Router();
 // Flow: Gemini (primary) → Groq (fallback 1) → OpenRouter (fallback 2) → graceful error
 
 type ProviderError = { provider: string; reason: "rate_limit" | "auth" | "unavailable" | "unknown"; message: string };
+type ProviderStatusEntry = { configured: boolean; status: "ok" | "rate_limit" | "auth" | "unavailable" | "unknown" | "untested"; lastChecked: string | null; latencyMs: number | null };
+
+const providerStatusStore: Record<string, ProviderStatusEntry> = {
+  gemini:     { configured: false, status: "untested", lastChecked: null, latencyMs: null },
+  groq:       { configured: false, status: "untested", lastChecked: null, latencyMs: null },
+  openrouter: { configured: false, status: "untested", lastChecked: null, latencyMs: null },
+};
+
+function syncConfiguredFlags() {
+  providerStatusStore.gemini.configured     = !!process.env.GEMINI_API_KEY;
+  providerStatusStore.groq.configured       = !!process.env.GROQ_API_KEY;
+  providerStatusStore.openrouter.configured = !!process.env.OPENROUTER_API_KEY;
+}
+syncConfiguredFlags();
 
 function getAIClient(apiKey: string, baseURL?: string) {
   if (!apiKey) return null;
@@ -39,6 +53,7 @@ async function tryProvider(
   providerName = "unknown",
 ): Promise<{ text: string | null; error?: ProviderError }> {
   if (!client) return { text: null };
+  const t0 = Date.now();
   try {
     const response = await client.chat.completions.create({
       model,
@@ -46,11 +61,21 @@ async function tryProvider(
       messages: [{ role: "system", content: systemPrompt }, ...messages],
     });
     const text = response.choices?.[0]?.message?.content ?? null;
+    if (providerStatusStore[providerName]) {
+      providerStatusStore[providerName].status = "ok";
+      providerStatusStore[providerName].lastChecked = new Date().toISOString();
+      providerStatusStore[providerName].latencyMs = Date.now() - t0;
+    }
     return { text };
   } catch (err: any) {
     const reason = classifyError(err);
     const msg = err?.message ?? "Unknown error";
     console.warn(`[AI] ${providerName} failed (${reason}): ${msg.substring(0, 120)}`);
+    if (providerStatusStore[providerName]) {
+      providerStatusStore[providerName].status = reason;
+      providerStatusStore[providerName].lastChecked = new Date().toISOString();
+      providerStatusStore[providerName].latencyMs = Date.now() - t0;
+    }
     return { text: null, error: { provider: providerName, reason, message: msg } };
   }
 }
@@ -123,6 +148,51 @@ function buildUserFriendlyError(errors: ProviderError[], context: "chat" | "clin
   }
   return "AI services are temporarily unavailable. Please try again shortly or contact the front desk for assistance.";
 }
+
+// ── GET /ai/status/ — provider health dashboard ───────────────────────────────
+router.get("/ai/status/", requireAuth, requireRole("admin", "doctor"), async (req, res) => {
+  syncConfiguredFlags();
+  const ping = req.query.ping === "true";
+
+  if (ping) {
+    const pingPrompt = "Respond with only the word: ok";
+    const pingMsg = [{ role: "user" as const, content: "ping" }];
+
+    const tests: Promise<void>[] = [];
+
+    if (process.env.GEMINI_API_KEY) {
+      tests.push((async () => {
+        const client = getAIClient(process.env.GEMINI_API_KEY!, "https://generativelanguage.googleapis.com/v1beta/openai/");
+        await tryProvider(client, process.env.GEMINI_MODEL || "gemini-2.5-flash", pingMsg, pingPrompt, 8, "gemini");
+      })());
+    }
+    if (process.env.GROQ_API_KEY) {
+      tests.push((async () => {
+        const client = getAIClient(process.env.GROQ_API_KEY!, "https://api.groq.com/openai/v1");
+        await tryProvider(client, "llama-3.3-70b-versatile", pingMsg, pingPrompt, 8, "groq");
+      })());
+    }
+    if (process.env.OPENROUTER_API_KEY) {
+      tests.push((async () => {
+        const client = getAIClient(process.env.OPENROUTER_API_KEY!, "https://openrouter.ai/api/v1");
+        await tryProvider(client, "meta-llama/llama-3.3-70b-instruct", pingMsg, pingPrompt, 8, "openrouter");
+      })());
+    }
+
+    await Promise.allSettled(tests);
+  }
+
+  const providers = [
+    { id: "gemini",     label: "Gemini",      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",        ...providerStatusStore.gemini },
+    { id: "groq",       label: "Groq",         model: "llama-3.3-70b-versatile",                             ...providerStatusStore.groq },
+    { id: "openrouter", label: "OpenRouter",   model: "meta-llama/llama-3.3-70b-instruct",                  ...providerStatusStore.openrouter },
+  ];
+
+  const anyOk = providers.some((p) => p.status === "ok");
+  const activeProvider = providers.find((p) => p.status === "ok")?.id ?? null;
+
+  res.json({ providers, active_provider: activeProvider, cascade_healthy: anyOk, checked_at: new Date().toISOString() });
+});
 
 // ── GET /ai/insights/ ──────────────────────────────────────────────────────────
 router.get("/ai/insights/", requireAuth, async (req, res) => {
