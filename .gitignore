@@ -1,102 +1,49 @@
-# =====================================
-# Environment & Secrets
-# =====================================
-.env
-.env.local
-.env.*.local
-.env.prod
-.env.*.prod
-*.pem
-*.key
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
-# =====================================
-# IDE & Editor
-# =====================================
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-*.sublime-*
+# compiled output
+dist
+tmp
+out-tsc
+*.tsbuildinfo
+.expo
+.expo-shared
 
-# =====================================
-# Python / Django
-# =====================================
-__pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
-*.egg
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-venv/
-env/
-ENV/
-backend/static/
-backend/media/
-backend/db.sqlite3
-backend/staticfiles/
-*.log
+# dependencies
+node_modules
 
-# =====================================
-# Node / Frontend
-# =====================================
-node_modules/
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
 npm-debug.log
-npm-debug.log.*
 yarn-error.log
-yarn-error.log.*
-frontend/dist/
-frontend/node_modules/
-frontend/.env.local
-frontend/.env.*.local
+testem.log
+/typings
 
-# =====================================
-# Docker
-# =====================================
-.docker/
-docker-compose.override.yml
-
-# =====================================
-# Vercel & Render
-# =====================================
-.vercel/
-.render/
-.next/
-
-# =====================================
-# OS Specific
-# =====================================
+# System Files
 .DS_Store
 Thumbs.db
 
-# =====================================
-# Sandbox & Development Tools
-# =====================================
-__v0_runtime_loader.js
-__v0_devtools.tsx
-__v0_jsx-dev-runtime.ts
-.snowflake/
-.v0-trash/
-next.user-config.*
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
 
-# =====================================
-# Temporary Files
-# =====================================
-*.tmp
-*.temp
-*.bak
+# Replit
 .cache/
-
-# =====================================
-# Database
-# =====================================
-*.db
-*.sqlite
-*.sqlite3
-postgres/
+.local/
